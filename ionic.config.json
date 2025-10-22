@@ -1,0 +1,7 @@
+{
+  "name": "politrack-ionic",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular-standalone"
+}

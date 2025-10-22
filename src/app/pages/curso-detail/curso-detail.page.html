@@ -1,0 +1,377 @@
+<ion-header [translucent]="true">
+  <ion-toolbar class="curso-header">
+    <ion-buttons slot="start">
+      <ion-button (click)="goBack()">
+        <ion-icon slot="icon-only" name="arrow-back"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+
+    <!-- Logo del Politécnico y título -->
+    <div class="header-content" slot="start">
+      <img src="assets/logo-poli.svg" alt="Politécnico Grancolombiano" class="poli-logo">
+      <div class="header-text">
+        <ion-title class="curso-title">
+          {{ curso?.codigo || '' }} - {{ curso?.nombre || 'Curso' }}
+        </ion-title>
+        <span class="curso-subtitle">Sistema de Evaluación Académica</span>
+      </div>
+    </div>
+
+    <ion-buttons slot="end">
+      <ion-button (click)="toggleSeguimiento()" [color]="showSeguimiento ? 'secondary' : 'light'">
+        <ion-icon slot="icon-only" name="analytics-outline"></ion-icon>
+      </ion-button>
+      <ion-button (click)="exportarCurso()">
+        <ion-icon slot="icon-only" name="download-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <!-- Spinner de carga -->
+  <div *ngIf="isLoading" class="loading-container">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Cargando...</p>
+  </div>
+
+  <!-- Layout principal con tabla y panel de seguimiento -->
+  <div *ngIf="!isLoading && curso" class="main-layout shared-layout">
+
+    <!-- Tabla de estudiantes -->
+    <div class="table-section">
+      <!-- Barra de búsqueda -->
+      <div class="toolbar-container">
+        <ion-searchbar
+          [(ngModel)]="searchText"
+          (ionInput)="onSearchChange($event)"
+          placeholder="Buscar estudiante..."
+          debounce="300"
+            class="search-bar">
+          </ion-searchbar>
+        </div>
+        <div class="table-wrapper-fixed">
+          <!-- Tabla simplificada con divs -->
+          <table class="student-table">
+            <thead>
+              <tr class="header-row">
+                <th class="sticky-left checkbox-col">
+                  <ion-checkbox
+                    [(ngModel)]="selectAll"
+                    (ionChange)="toggleSelectAll($event)">
+                  </ion-checkbox>
+                </th>
+                <th class="sticky-left apellidos-col">Apellidos</th>
+                <th class="sticky-left nombres-col">Nombres</th>
+                <th class="grupo-col">G</th>
+
+                <!-- Evaluaciones E1 -->
+                <th class="entrega-col">E1-PG</th>
+                <th class="entrega-col">E1-PI</th>
+                <th class="entrega-col sum-col">E1-Σ</th>
+
+                <!-- Evaluaciones E2 -->
+                <th class="entrega-col">E2-PG</th>
+                <th class="entrega-col">E2-PI</th>
+                <th class="entrega-col sum-col">E2-Σ</th>
+
+                <!-- Evaluaciones EF -->
+                <th class="entrega-col">EF-PG</th>
+                <th class="entrega-col">EF-PI</th>
+                <th class="sticky-right entrega-col sum-col">EF-Σ</th>
+              </tr>
+            </thead>
+            <tbody>
+            <tr
+              *ngFor="let estudiante of estudiantesFiltrados"
+              class="student-row"
+              [class.selected]="isSelected(estudiante.correo)"
+              [class.evaluando]="evaluacionActual.estudiante?.correo === estudiante.correo"
+              [class.puntos-actualizados]="isPuntosActualizados(estudiante.correo)"
+              (click)="abrirEvaluacion(estudiante)">
+
+              <td class="sticky-left checkbox-col" (click)="$event.stopPropagation()">
+                <ion-checkbox
+                  [checked]="isSelected(estudiante.correo)"
+                  (ionChange)="toggleSelectEstudiante(estudiante.correo)">
+                </ion-checkbox>
+              </td>
+
+              <td class="sticky-left apellidos-col">
+                {{ estudiante.apellidos }}
+              </td>
+
+              <td class="sticky-left nombres-col">
+                {{ estudiante.nombres }}
+              </td>
+
+              <td class="grupo-col">
+                {{ estudiante.subgrupo ? estudiante.subgrupo.replace('G', '') : '-' }}
+              </td>
+
+              <!-- Evaluaciones E1 -->
+              <td class="score-col" (click)="$event.stopPropagation()">
+                <span class="editable-score" (click)="abrirEditorPuntos(estudiante, 'E1')">
+                  {{ getEvaluacion(estudiante.correo, 'E1')?.pg_score || '-' }}
+                </span>
+              </td>
+              <td class="score-col" (click)="$event.stopPropagation()">
+                <span class="editable-score" (click)="abrirEditorPuntos(estudiante, 'E1')">
+                  {{ getEvaluacion(estudiante.correo, 'E1')?.pi_score || '-' }}
+                </span>
+              </td>
+              <td class="score-col sum-col">
+                {{ getEvaluacion(estudiante.correo, 'E1')?.sumatoria || '-' }}
+              </td>
+
+              <!-- Evaluaciones E2 -->
+              <td class="score-col" (click)="$event.stopPropagation()">
+                <span class="editable-score" (click)="abrirEditorPuntos(estudiante, 'E2')">
+                  {{ getEvaluacion(estudiante.correo, 'E2')?.pg_score || '-' }}
+                </span>
+              </td>
+              <td class="score-col" (click)="$event.stopPropagation()">
+                <span class="editable-score" (click)="abrirEditorPuntos(estudiante, 'E2')">
+                  {{ getEvaluacion(estudiante.correo, 'E2')?.pi_score || '-' }}
+                </span>
+              </td>
+              <td class="score-col sum-col">
+                {{ getEvaluacion(estudiante.correo, 'E2')?.sumatoria || '-' }}
+              </td>
+
+              <!-- Evaluaciones EF -->
+              <td class="score-col" (click)="$event.stopPropagation()">
+                <span class="editable-score" (click)="abrirEditorPuntos(estudiante, 'EF')">
+                  {{ getEvaluacion(estudiante.correo, 'EF')?.pg_score || '-' }}
+                </span>
+              </td>
+              <td class="score-col" (click)="$event.stopPropagation()">
+                <span class="editable-score" (click)="abrirEditorPuntos(estudiante, 'EF')">
+                  {{ getEvaluacion(estudiante.correo, 'EF')?.pi_score || '-' }}
+                </span>
+              </td>
+              <td class="sticky-right score-col sum-col">
+                {{ getEvaluacion(estudiante.correo, 'EF')?.sumatoria || '-' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Resumen de Rúbrica (solo visible después de guardar evaluación grupal) -->
+      <div class="resumen-section" *ngIf="mostrarResumen && evaluacionGrupalActiva">
+        <div class="rubrica-resumen-scroll">
+          <h4 class="resumen-titulo">
+            Resumen de Rúbrica - {{ evaluacionGrupal.entrega }}
+          </h4>
+          
+          <div class="resumen-criterios">
+            <div class="criterio-resumen" *ngFor="let item of getResumenRubrica()">
+              <div class="criterio-header-resumen">
+                {{ item.nombre }} {{ item.peso }}
+              </div>
+              <div class="criterio-niveles">
+                {{ item.nivelesInfo }}
+              </div>
+              <div class="criterio-evaluacion">
+                {{ item.nivelSeleccionado }} ({{ item.puntos }} pts)
+              </div>
+              <div class="criterio-descripcion">
+                {{ item.descripcion }}
+              </div>
+              <div class="criterio-comentario" *ngIf="item.tieneComentario">
+                Comentarios: {{ item.comentario }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Resumen de rendimiento por entrega -->
+          <div class="rendimiento-entregas">
+            <h4 class="rendimiento-titulo">Rendimiento por Entrega</h4>
+            <div class="entrega-rendimiento" *ngFor="let entrega of ['E1', 'E2', 'EF']">
+              <div class="entrega-nombre">{{ entrega }}:</div>
+              <div class="entrega-info">
+                {{ getRendimientoEntrega(entrega) }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de Seguimiento -->
+    <div class="seguimiento-panel visible">
+      <div class="seguimiento-header">
+        <h3>Seguimiento - {{ curso.codigo || 'Curso' }}
+          <span class="total-badge">{{ getTotalEstudiantes() }} estudiantes</span></h3>
+        
+        <!-- Resumen de evaluación -->
+        <div class="evaluacion-resumen" *ngIf="evaluacionActual.estudiante || evaluacionGrupalActiva">
+          <div class="resumen-item">
+            <span class="label">Puntos totales:</span>
+            <span class="value">{{ calcularTotalEvaluacion() }} / {{ getMaximoPuntaje() }}</span>
+          </div>
+          <div class="resumen-item">
+            <span class="label">Progreso:</span>
+            <div class="progress-bar">
+              <div class="progress-fill" [style.width.%]="getPorcentajeCompletitud()"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="seguimiento-content">
+        <div class="entrega-tabs">
+          <ion-segment [(ngModel)]="entregaActiva" (ionChange)="onEntregaChange($event)">
+            <ion-segment-button value="E1">
+              <ion-label>Entrega 1</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="E2">
+              <ion-label>Entrega 2</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="EF">
+              <ion-label>EF</ion-label>
+            </ion-segment-button>
+          </ion-segment>
+        </div>
+
+        <!-- Separador visual -->
+        <div class="tabs-separator"></div>
+
+        <!-- Botones de subgrupo simplificados como referencia -->
+        <div class="filtros-container">
+          <button
+            class="filtro-btn"
+            [class.active]="subgrupoSeleccionado === ''"
+            (click)="seleccionarSubgrupo('')">
+            T
+          </button>
+          <button
+            *ngFor="let sub of getSubgruposOrdenados()"
+            class="filtro-btn"
+            [class.active]="subgrupoSeleccionado === sub"
+            (click)="seleccionarSubgrupo(sub)">
+            {{ sub.replace('G', '') }}
+          </button>
+        </div>
+
+        <!-- Información de evaluación activa -->
+        <div class="evaluacion-activa" *ngIf="evaluacionActual.estudiante || evaluacionGrupalActiva">
+          <div class="evaluacion-info-row">
+            <div class="estudiante-info">
+              <h4 *ngIf="!evaluacionGrupalActiva && evaluacionActual.estudiante">
+                Evaluando: {{ evaluacionActual.estudiante.nombres }} {{ evaluacionActual.estudiante.apellidos }}
+              </h4>
+              <h4 *ngIf="evaluacionGrupalActiva">
+                Evaluación Grupal: {{ subgrupoSeleccionado }}
+              </h4>
+              <div class="evaluacion-meta">
+                <span class="entrega-badge">{{ evaluacionGrupalActiva ? evaluacionGrupal.entrega : evaluacionActual.entrega }}</span>
+                <span class="tipo-badge" [class.grupal]="evaluacionGrupalActiva" [class.individual]="!evaluacionGrupalActiva">
+                  {{ evaluacionGrupalActiva ? 'GRUPAL' : 'INDIVIDUAL' }}
+                </span>
+                <span class="progreso-badge" [ngClass]="'rendimiento-' + getClaseRendimiento()">
+                  {{ getPorcentajeCompletitud() }}% - {{ getTextoRendimiento() }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Botones de acción cuadrados con emojis -->
+            <div class="evaluacion-actions-buttons">
+              <button
+                class="action-btn cancel-btn"
+                (click)="cancelarEvaluacion()"
+                title="Cancelar evaluación">
+                ❌
+              </button>
+              <button
+                class="action-btn save-btn"
+                [disabled]="!isEvaluacionCompleta()"
+                (click)="finalizarEvaluacion()"
+                title="Finalizar evaluación">
+                💾
+              </button>
+            </div>
+          </div>
+        </div>
+
+
+
+
+
+        <!-- Criterios de Evaluación - Tabla con encabezado fijo -->
+        <div class="rubrica-table-container" *ngIf="evaluacionActual.estudiante || evaluacionGrupalActiva">
+          
+          <!-- Encabezado fijo de la tabla -->
+          <div class="rubrica-table-header">
+            <div class="header-criterio">Criterio</div>
+            <div class="header-nivel" 
+                 *ngFor="let nivel of getNivelesRubrica(); let i = index"
+                 [class]="'nivel-' + i"
+                 [class.active]="isTodosCriteriosConNivel(i)">
+              <ion-checkbox 
+                [checked]="isTodosCriteriosConNivel(i)"
+                (ionChange)="selectNivelParaTodosCriterios(i)">
+              </ion-checkbox>
+              <span class="nivel-nombre" (click)="selectNivelParaTodosCriterios(i)">{{ nivel.nombre }}</span>
+            </div>
+          </div>
+
+          <!-- Contenido desplazable de la tabla -->
+          <div class="rubrica-table-body">
+            <div class="rubrica-row" *ngFor="let criterio of getCriteriosEntregaActiva()">
+              <!-- Columna de criterio -->
+              <div class="criterio-cell">
+                <div class="criterio-header-row">
+                  <ion-button 
+                    fill="clear" 
+                    size="small"
+                    [class]="'comentario-btn ' + (tieneComentario(criterio.codigo) ? 'has-comment' : '')"
+                    (click)="abrirComentarios(criterio.codigo, criterio.nombre)"
+                    [title]="tieneComentario(criterio.codigo) ? 'Ver/editar comentario existente' : 'Agregar comentario'">
+                    <ion-icon [name]="tieneComentario(criterio.codigo) ? 'chatbox' : 'chatbox-outline'" slot="icon-only"></ion-icon>
+                  </ion-button>
+                  <h3>{{ criterio.nombre }}</h3>
+                </div>
+                <span class="criterio-peso">{{ criterio.peso }}</span>
+              </div>
+
+              <!-- Columnas de niveles -->
+              <div class="nivel-cell"
+                   *ngFor="let nivel of criterio.niveles; let i = index"
+                   [class]="'nivel-' + i"
+                   [class.selected]="getCriterioValue(criterio.codigo) === nivel.valor"
+                   [class.available]="evaluacionActual.estudiante || evaluacionGrupalActiva"
+                   (click)="selectNivel(criterio.codigo, nivel.valor)">
+                <div class="nivel-content">
+                  <div class="nivel-header-inline">
+                    <span class="nivel-valor-container">
+                      <ion-icon 
+                        *ngIf="tieneComentarioCriterio(criterio.codigo) && getCriterioValue(criterio.codigo) === nivel.valor"
+                        name="flag" 
+                        class="flag-icon">
+                      </ion-icon>
+                      <span class="nivel-valor">{{ nivel.valor }}</span>
+                    </span>
+                    <span class="nivel-rango">{{ getRangoNivel(criterio, i) }}</span>
+                  </div>
+                  <p class="nivel-descripcion">{{ nivel.descripcion }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Estado vacío -->
+  <div *ngIf="!isLoading && (!curso || estudiantes.length === 0)" class="empty-state">
+    <ion-icon name="school-outline" class="empty-icon"></ion-icon>
+    <h2>No hay estudiantes</h2>
+    <p>Este curso no tiene estudiantes registrados</p>
+  </div>
+</ion-content>

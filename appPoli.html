@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Listas de Estudiantes</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --danger-color: #dc3545;
+            --success-color: #28a745;
+            --success-bg: #d4edda;
+            --warning-color: #ffc107;
+            --warning-bg: #fff3cd;
+            --dark-bg: #343a40;
+            --light-bg: #f8f9fa;
+            --border-color: #dee2e6;
+            --sidebar-width: 200px;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0; background-color: var(--light-bg);
+            overflow: hidden;
+        }
+        
+        #panelIzquierdo { 
+            position: fixed; top: 0; left: 0; height: 100%; width: var(--sidebar-width); background-color: var(--dark-bg); 
+            color: white; padding: 60px 18px 18px 18px; display: flex; flex-direction: column; 
+            transform: translateX(0); transition: transform 0.3s ease; z-index: 1000;
+        }
+        body.sidebar-collapsed #panelIzquierdo { transform: translateX(-100%); }
+
+        #sidebarToggleBtn {
+            position: fixed; top: 10px; left: 8px;
+            z-index: 1001; font-size: 1.8em;
+            background: none; border: none; color: var(--secondary-color); cursor: pointer;
+            transition: transform 0.3s ease, color 0.3s ease;
+        }
+        body:not(.sidebar-collapsed) #sidebarToggleBtn {
+            transform: translateX(calc(var(--sidebar-width) - 45px));
+            color: white;
+        }
+        .config-controls { flex-grow: 1; overflow-y: auto; }
+        .config-controls button { width: 100%; margin-bottom: 10px; font-size: 0.9em; padding: 8px; }
+        .file-name-display { font-size: 0.8em; color: #a0d0ff; margin-bottom: 5px; text-align: center; padding: 5px; background-color: rgba(255, 255, 255, 0.1); border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        #contenidoPrincipal { 
+            height: 100vh; overflow-y: auto; display: flex; flex-direction: column;
+            transition: margin-left 0.3s ease; margin-left: 50px; 
+            padding: 0;
+        }
+        body:not(.sidebar-collapsed) #contenidoPrincipal { margin-left: var(--sidebar-width); }
+        
+        .workspace-container { 
+            display: flex; 
+            gap: 15px;
+            flex-grow: 1; 
+            overflow: hidden; 
+            padding: 15px;
+        }
+        #listaContainer { 
+            flex: 3.5; background-color: white; padding: 2px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            display: flex; flex-direction: column;
+            overflow: hidden;
+        }
+        #listaContainer.is-scrolling-table { overflow-y: hidden; }
+        #listaContainer:not(.is-scrolling-table) { overflow-y: auto; }
+
+        
+        #list-header { 
+            flex-shrink: 0; padding: 10px 16px 5px 16px;
+            display: flex; justify-content: space-between; align-items: center; gap: 15px;
+        }
+        .course-title-container { display: flex; align-items: center; gap: 10px; }
+        #cursoNombre { padding-top: 0; margin-top: 0; margin-bottom: 0; font-size: 1.2em; }
+        #renameCourseBtn { background: none; border: none; font-size: 1.2em; cursor: pointer; color: var(--secondary-color); padding: 0; }
+        #renameCourseBtn:hover { color: var(--primary-color); }
+        
+        .tools-container {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 15px;
+            padding: 5px 16px 10px 16px;
+            flex-shrink: 0;
+        }
+        
+        .curso-btn { 
+            display: inline-block; padding: 6px 12px; border: 1px solid var(--border-color); 
+            border-radius: 4px; font-size: 0.85em; cursor: pointer; transition: background-color 0.2s, color 0.2s, border-color 0.2s; 
+            background-color: var(--light-bg); color: var(--secondary-color); font-weight: bold; 
+        }
+        .curso-btn.active {
+            color: white;
+            border-color: var(--primary-color);
+            background-color: var(--primary-color);
+        }
+
+        .main-content-wrapper { 
+            display: flex; 
+            flex-direction: column; 
+            flex-grow: 1; 
+            min-height: 0;
+        }
+        #listaContainer.is-scrolling-table .table-wrapper {
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        #listaContainer:not(.is-scrolling-table) .table-wrapper {
+            overflow-y: visible;
+            flex-shrink: 0;
+        }
+        .table-wrapper { 
+            padding: 0 16px;
+            overflow-x: auto;
+        }
+        
+        #resumenSection {
+            display: flex;
+            flex-direction: column;
+            margin: 20px 2px 0 2px;
+            background-color: var(--light-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            flex-shrink: 0;
+            min-height: 0;
+        }
+        #listaContainer.is-scrolling-table #resumenSection {
+            flex-basis: 70%;
+            overflow: hidden;
+        }
+        #listaContainer:not(.is-scrolling-table) #resumenSection {
+             min-height: 220px;
+        }
+        .resumen-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 5px;
+            flex-shrink: 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .resumen-header h5 { margin: 0; color: var(--secondary-color); }
+        .resumen-header .copy-btn { background: none; border: none; cursor: pointer; font-size: 1em; color: var(--secondary-color); }
+        #resumenContent { 
+            white-space: pre-wrap; 
+            font-family: monospace;
+            font-size: 0.8em; 
+            padding: 8px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        
+        table { width: 100%; border-collapse: collapse; table-layout: auto; }
+        
+        th, td { border: 1px solid var(--border-color); padding: 2px 5px; font-size: 0.8rem; }
+        td { text-align: left; }
+        .text-center { text-align: center; }
+        
+        th { 
+            background-color: var(--light-bg); font-weight: bold; text-align: center; vertical-align: middle;
+            position: sticky; top: 0; z-index: 2;
+        }
+        th.borderless { border: none; background-color: white; }
+        thead tr:last-child th { top: 28px; }
+
+        th.compact-header { 
+            padding: 4px 2px; 
+            line-height: 1.1;
+        }
+        .tipo-tag {
+            font-weight: bold;
+        }
+
+        th .clickable-header:hover { color: var(--primary-color); }
+        th[data-role="search-header"] { text-align: left; }
+        
+        .export-header-btn {
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            font-size: 1em;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #e0e0e0;
+            color: var(--secondary-color);
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .export-header-btn:hover {
+            background-color: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .sticky-col {
+            position: sticky;
+            background-color: white;
+            z-index: 3;
+        }
+        th.sticky-col { z-index: 4; }
+        thead tr:last-child th.sticky-col { top: 28px; }
+
+        tr.active-student .sticky-col { background-color: #d1e7fd !important; }
+        
+        .sticky-col-1 { left: 0; width: 40px; }
+        .sticky-col-2 { left: 40px; min-width: 120px; }
+        .sticky-col-3 { left: 160px; min-width: 120px; }
+        .sticky-col-4 { left: 280px; min-width: 180px; }
+        th.sticky-col-1, td.sticky-col-1 { padding: 1px; }
+        
+        tr.active-student { background-color: #d1e7fd !important; }
+        td.clickable { cursor: pointer; }
+        td.clickable:hover { text-decoration: underline; }
+        td.individually-evaluated { background-color: var(--success-bg) !important; }
+        
+        th.highlight-col {
+            background-color: var(--warning-bg) !important;
+        }
+        th[colspan] { background-color: #e9ecef; }
+
+        th.sum-col {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        td.sum-col { 
+            font-weight: bold; 
+            background-color: #e9ecef;
+        }
+
+        #nombresHeader { cursor: default; }
+        #toggleEmailBtn { font-weight: bold; color: var(--primary-color); margin-left: 4px; display: inline-block; cursor: pointer; }
+        table.email-hidden .email-col { display: none; }
+
+        #seguimientoPanel { flex: 1.9; background-color: white; padding: 0 18px 0 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        #seguimientoHeader { display: flex; flex-direction: column; align-items: stretch; border-bottom: 2px solid var(--border-color); padding: 10px 0 10px 18px; margin-bottom: 10px; }
+        .header-top-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        .seguimiento-title-container { display: flex; flex-direction: column; align-items: flex-start; }
+        .title-line { display: flex; align-items: baseline; gap: 15px; }
+        #seguimientoHeader h2 { margin: 0; }
+        #evaluationWarning { color: var(--danger-color); font-weight: bold; font-size: 0.56em; display: none; }
+        #totalPuntos { font-size: 1.21em; font-weight: bold; color: var(--primary-color); }
+        .header-controls { display: flex; align-items: center; gap: 8px; }
+        .header-controls .icon-btn { font-size: 1.3em; background: none; border: none; cursor: pointer; color: var(--secondary-color); }
+        .header-controls .icon-btn:disabled { color: #ccc; cursor: not-allowed; }
+        .header-controls .icon-btn:hover:not(:disabled) { color: var(--primary-color); }
+        #btnGuardarEvaluacion { font-size: 0.9em; padding: 6px 12px; }
+
+        .header-bottom-row { display: flex; justify-content: space-between; align-items: center; padding: 0; margin-top: 8px; }
+        #filtrosContainer { display: flex; gap: 4px; overflow-x: auto; flex-grow: 1; }
+        .filtro-btn { height: 28px; font-size: 11px; padding: 0 8px; flex-shrink: 0; border-radius: 5px; border: 1px solid var(--border-color); cursor: pointer; background-color: var(--light-bg); color: var(--secondary-color); }
+        #todos-btn-filter { width: 30px; background-color: #000; color: white; }
+        .filtro-btn:hover { background-color: #e2e6ea; }
+        .filtro-btn.active { background-color: var(--danger-color) !important; color: white !important; border-color: var(--danger-color) !important; }
+        .filtro-btn.completed { background-color: var(--success-color) !important; color: white !important; border-color: var(--success-color) !important; }
+        
+        .bulk-level-selector { display: flex; gap: 8px; align-items: center; flex-shrink: 0; padding-left: 10px; }
+        .bulk-level-selector label { font-size: 0.8em; display: flex; align-items: center; gap: 2px; cursor: pointer; border: none; margin: 0; padding: 0; }
+        .bulk-level-selector input { margin: 0; padding: 0; }
+        
+        #evaluacionContexto { 
+            font-size: 0.8em; 
+            color: black; font-weight: bold; 
+            text-align: right;
+        }
+        #seguimientoContent { flex-grow: 1; overflow-y: auto; padding-left: 18px; }
+        
+        .criterio-evaluacion { margin-bottom: 15px; border: none; border-radius: 5px; transition: background-color 0.3s; font-size: 80%; }
+        .criterio-evaluacion.unevaluated { background-color: var(--warning-bg); border-left: 3px solid var(--warning-color); }
+        .criterio-header { display: flex; align-items: center; gap: 8px; padding: 0; background-color: var(--light-bg); border-bottom: 1px solid var(--border-color); font-size: 1.08em; }
+        .criterio-header h5 { margin: 0; flex-grow: 1; display: flex; align-items: center; }
+        .comment-indicator { margin-left: 5px; display: none; }
+        .max-points, .level-points { padding: 1px 3px; border-radius: 3px; outline: none; }
+        
+        .criterio-header .puntos-obtenidos { font-weight: bold; color: var(--danger-color); background-color: #fff; padding: 0; border-radius: 3px; border: 1px solid var(--border-color); min-width: 40px; text-align: center; cursor: pointer; font-size: 18px; }
+        .criterio-header .puntos-obtenidos[contenteditable="true"] { background-color: white; box-shadow: 0 0 2px 1px var(--primary-color); }
+        .criterio-header .icon-btn { background: none; border: none; cursor: pointer; padding: 0; font-size: 1.1em; color: var(--secondary-color); }
+        
+        .criterio-evaluacion .niveles { display: flex; width: 100%; border-collapse: collapse; }
+        .criterio-evaluacion .nivel { display: flex; flex: 1; padding: 1px; border: 1px solid var(--border-color); font-size: 0.85rem; cursor: pointer; transition: background-color 0.2s; }
+        .criterio-evaluacion .nivel:hover { background-color: #f0f8ff; }
+        .criterio-evaluacion .nivel.selected { background-color: #d1e7fd; }
+        
+        .level-header {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+            background-color: var(--light-bg);
+            border-right: 1px solid var(--border-color);
+            flex-shrink: 0;
+            width: 35px;
+            text-align: center;
+        }
+        .level-points-container { font-weight: bold; font-size: 0.9em; }
+        .level-title-rotated {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            font-weight: bold;
+            font-size: 1.5em;
+            color: var(--primary-color);
+        }
+        .level-description-container {
+            padding: 5px;
+        }
+        .nivel .description { color: #333; line-height: 1.2; }
+        .deduction-display { color: var(--danger-color); font-weight: bold; margin-left: 5px; font-size: 0.9em; }
+        .deduction-display:empty { display: none; }
+        
+        .modal-backdrop { z-index: 1050; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; }
+        .modal-content { background-color: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); width: 90%; max-width: 600px; display: flex; flex-direction: column; }
+        .modal-header { padding: 10px 15px; border-bottom: 1px solid #dee2e6; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { margin: 0; font-size: 1.1em; }
+        .modal-body { padding: 15px; max-height: 70vh; overflow-y: auto;}
+        
+        .modal-body .modal-actions {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .modal-toolbar { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .modal-toolbar-group { display: flex; gap: 15px; align-items: center; }
+        .modal-toolbar button { font-size: 0.75em !important; background: none; border: none; cursor: pointer; padding: 0; color: var(--secondary-color); display: flex; align-items: center; gap: 3px; }
+        .modal-toolbar button:hover { color: var(--primary-color); }
+        .modal-toolbar .icon { font-size: 1.2em; }
+
+        #commentTextarea { width: 100%; min-height: 120px; font-family: inherit; font-size: 1em; padding: 8px; border-radius: 3px; border: 1px solid #ccc; transition: background-color 0.3s; }
+        #commentTextarea:read-only { background-color: #e9ecef; color: #495057; }
+        
+        .comment-extra-fields { display: flex; gap: 15px; margin-top: 10px; align-items: center; }
+        .comment-extra-fields label { font-weight: bold; font-size: 0.9em; }
+        .comment-extra-fields input { width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
+
+        #cannedCommentsContainer { margin-top: 15px; }
+        #cannedCommentsList { list-style: none; padding: 0; margin: 5px 0 0 0; max-height: 150px; overflow-y: auto; border-top: 1px solid var(--border-color); padding-top: 10px; }
+        #cannedCommentsList li { background-color: #f1f1f1; padding: 6px 8px; border-radius: 4px; margin-bottom: 5px; font-size: 0.9em; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        #cannedCommentsList li:hover { background-color: #e2e6ea; }
+        #cannedCommentsList .delete-canned { font-size: 1em; color: var(--danger-color); background: none; border: none; cursor: pointer; margin-left: 10px; }
+
+        #confirmDeleteInput { width: 100%; padding: 8px; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 4px; text-align: center; font-weight: bold; }
+        button:disabled { background-color: #a9a9a9; cursor: not-allowed; }
+
+        button { background-color: var(--primary-color); color: white; border: none; padding: 9px 13px; border-radius: 5px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
+        button.secondary { background-color: var(--secondary-color); }
+        button.danger { background-color: var(--danger-color); }
+
+        /* --- Responsive Design Rules --- */
+
+        @media (max-width: 1024px) {
+            .workspace-container {
+                flex-direction: column;
+                overflow: auto;
+            }
+
+            #listaContainer, #seguimientoPanel {
+                min-height: 450px;
+                flex-grow: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #contenidoPrincipal {
+                padding: 10px;
+                margin-left: 0 !important;
+            }
+
+            body:not(.sidebar-collapsed) #panelIzquierdo {
+                box-shadow: 3px 0 15px rgba(0,0,0,0.2);
+            }
+
+            #sidebarToggleBtn {
+                transform: translateX(0);
+            }
+             body:not(.sidebar-collapsed) #sidebarToggleBtn {
+                transform: translateX(calc(var(--sidebar-width) - 45px));
+            }
+
+            .tools-container, #course-toolbar {
+                flex-wrap: wrap;
+            }
+
+            .modal-content {
+                width: 95%;
+                max-height: 90vh;
+            }
+            
+            .modal-header {
+                 flex-direction: column;
+                 align-items: flex-start;
+                 gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body class="sidebar-collapsed">
+    
+    <button id="sidebarToggleBtn">⚙️</button>
+    <div id="panelIzquierdo"></div>
+    <div id="contenidoPrincipal">
+        <div class="workspace-container">
+            <div id="listaContainer"></div>
+            <div id="seguimientoPanel">
+                <div id="seguimientoHeader">
+                    <div class="header-top-row">
+                        <div class="seguimiento-title-container">
+                            <div class="title-line">
+                                <h2>Seguimiento</h2>
+                                <span id="totalPuntos">Total: 0</span>
+                            </div>
+                            <span id="evaluationWarning">(Faltan criterios por evaluar)</span>
+                        </div>
+                        <div class="header-controls">
+                             <button id="undoBtn" class="icon-btn" title="Deshacer">↩️</button>
+                             <button id="redoBtn" class="icon-btn" title="Rehacer">↪️</button>
+                             <button id="btnGuardarEvaluacion" style="display: none;">Guardar</button>
+                        </div>
+                    </div>
+                    <div class="header-bottom-row">
+                        <div id="filtrosContainer"></div>
+                        <div class="bulk-level-selector" style="display: none;">
+                            <label><input type="radio" name="bulk-level" value="0"> I</label>
+                            <label><input type="radio" name="bulk-level" value="1"> A</label>
+                            <label><input type="radio" name="bulk-level" value="2"> E</label>
+                        </div>
+                    </div>
+                </div>
+                <div id="seguimientoContent">
+                    <p style="color: #6c757d;">Seleccione una acción para comenzar.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="customModal" class="modal-backdrop"></div>
+    <input type="file" id="importFile" accept=".json" style="display: none;">
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const STORAGE_KEY = 'gestorCursosData';
+        const STATE_STORAGE_KEY = 'appUIState';
+        const EVALUACIONES_STORAGE_KEY = 'evaluacionesData';
+        const CANNED_COMMENTS_STORAGE_KEY = 'cannedCommentsData';
+        const RUBRIC_DEFINITIONS_STORAGE_KEY = 'rubricDefinitionsData';
+        
+        const panelIzquierdo = document.getElementById('panelIzquierdo');
+        const customModal = document.getElementById('customModal');
+        panelIzquierdo.innerHTML = `<div class="config-controls"><p>Añade o actualiza un curso.</p><p id="fileNameDisplay" class="file-name-display">Ningún archivo</p><input type="file" id="csvFile" accept=".csv" style="display: none;"><button id="selectFileBtn">Examinar...</button><button id="crearListaBtn">Cargar Lista</button><hr style="border-color: #6c757d; margin: 18px 0;"><button id="exportarBtn" class="secondary">Exportar</button><button id="importarBtn" class="secondary">Importar</button><button id="borrarBtn" class="danger">Borrar Todo</button></div>`;
+        
+        let datosCsvTemporales = null;
+        let cursosData = {};
+        let uiState = { cursoActivo: null, courseStates: {} };
+        let evaluacionesData = {};
+        let cannedCommentsData = {};
+        let rubricDefinitionsData = {};
+        let currentSearchValue = '';
+
+        const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+        const listaContainer = document.getElementById('listaContainer');
+        const seguimientoContent = document.getElementById('seguimientoContent');
+        const btnGuardarEvaluacionHeader = document.getElementById('btnGuardarEvaluacion');
+        
+        // --- Undo/Redo History ---
+        let historyBuffer = [];
+        let historyIndex = -1;
+        const MAX_HISTORY = 10;
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+
+        sidebarToggleBtn.addEventListener('click', () => {
+            document.body.classList.toggle('sidebar-collapsed');
+        });
+
+        // --- Storage Functions ---
+        const cargarDatosDesdeStorage = () => JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        const guardarDatosEnStorage = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(cursosData));
+        const cargarUIState = () => JSON.parse(localStorage.getItem(STATE_STORAGE_KEY)) || {};
+        const guardarUIState = () => localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(uiState));
+        const cargarEvaluacionesData = () => JSON.parse(localStorage.getItem(EVALUACIONES_STORAGE_KEY)) || {};
+        const guardarEvaluacionesData = () => localStorage.setItem(EVALUACIONES_STORAGE_KEY, JSON.stringify(evaluacionesData));
+        const cargarCannedComments = () => JSON.parse(localStorage.getItem(CANNED_COMMENTS_STORAGE_KEY)) || {};
+        const guardarCannedComments = () => localStorage.setItem(CANNED_COMMENTS_STORAGE_KEY, JSON.stringify(cannedCommentsData));
+        const cargarRubricDefinitions = () => JSON.parse(localStorage.getItem(RUBRIC_DEFINITIONS_STORAGE_KEY)) || {};
+        const guardarRubricDefinitions = () => localStorage.setItem(RUBRIC_DEFINITIONS_STORAGE_KEY, JSON.stringify(rubricDefinitionsData));
+
+        // --- Utility ---
+        function naturalSort(a, b) { return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
+        
+        // --- Sistema de Modales ---
+        const hideModal = () => {
+            if (!customModal) return;
+            customModal.style.display = 'none';
+            customModal.innerHTML = '';
+        };
+
+        const createModal = ({ title, bodyHTML, footerButtons = [] }) => {
+            customModal.innerHTML = ''; 
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+            
+            let buttonsHTML = '';
+            if (footerButtons.length > 0) {
+                const buttons = footerButtons.map((btnConfig, index) => {
+                    const id = btnConfig.id || `modal-btn-${index}`;
+                    btnConfig.id = id;
+                    const classes = btnConfig.classes ? btnConfig.classes.join(' ') : '';
+                    const disabled = btnConfig.disabled ? 'disabled' : '';
+                    return `<button id="${id}" class="${classes}" ${disabled}>${btnConfig.text}</button>`;
+                }).join('');
+                buttonsHTML = `<div class="modal-actions">${buttons}</div>`;
+            }
+
+            modalContent.innerHTML = `
+                <div class="modal-header"><h3>${title}</h3></div>
+                <div class="modal-body">${bodyHTML}${buttonsHTML}</div>
+            `;
+            
+            customModal.appendChild(modalContent);
+
+            footerButtons.forEach(btnConfig => {
+                document.getElementById(btnConfig.id).addEventListener('click', btnConfig.onClick || hideModal);
+            });
+
+            customModal.style.display = 'flex';
+            
+            const clickListener = (e) => {
+                if (e.target === customModal) {
+                    hideModal();
+                    customModal.removeEventListener('click', clickListener);
+                }
+            };
+            customModal.addEventListener('click', clickListener);
+
+            return modalContent;
+        };
+        
+        const showCommentModal = (title, data = { comment: '', deduction: 0 }, rubricId, criterionTitle, levelName) => {
+            const { comment: existingComment, deduction: existingDeduction } = data;
+            return new Promise((resolve) => {
+                const bodyHTML = `
+                    <textarea id="commentTextarea" placeholder="Escriba aquí la justificación...">${existingComment}</textarea>
+                    <div class="comment-extra-fields">
+                        <label for="deductionInput">Descuento:</label>
+                        <input type="number" id="deductionInput" value="${existingDeduction || 0}" step="0.5">
+                    </div>
+                    ${levelName ? `
+                    <div id="cannedCommentsContainer">
+                        <b>Comentarios Frecuentes:</b>
+                        <ul id="cannedCommentsList"></ul>
+                    </div>` : ''}`;
+
+                const modalContent = createModal({title, bodyHTML});
+                
+                const modalHeader = modalContent.querySelector('.modal-header');
+                modalHeader.insertAdjacentHTML('beforeend', `
+                    <div class="modal-toolbar">
+                        <div class="modal-toolbar-group">
+                            ${levelName ? '<button id="btnSaveCannedComment" title="Guardar comentario para reutilizar"><span class="icon">💬</span>Guardar Frecuente</button>' : ''}
+                        </div>
+                        <div class="modal-toolbar-group">
+                             <button id="btnSaveComment" title="Guardar"><span class="icon">💾</span>Confirmar</button>
+                             <button id="btnEditComment" title="Editar"><span class="icon">✏️</span>Editar</button>
+                             <button id="btnDeleteComment" title="Eliminar"><span class="icon">🗑️</span>Eliminar</button>
+                             <button id="btnCloseComment" title="Cerrar"><span class="icon">❌</span>Cerrar</button>
+                        </div>
+                    </div>`);
+
+                const textarea = document.getElementById('commentTextarea');
+                const deductionInput = document.getElementById('deductionInput');
+                const btnSave = document.getElementById('btnSaveComment');
+                const btnEdit = document.getElementById('btnEditComment');
+                const btnDelete = document.getElementById('btnDeleteComment');
+                const btnClose = document.getElementById('btnCloseComment');
+                
+                const setMode = (isEditing) => {
+                    textarea.readOnly = !isEditing;
+                    deductionInput.readOnly = !isEditing;
+                    btnSave.style.display = isEditing ? 'inline-flex' : 'none';
+                    btnEdit.style.display = !isEditing && (textarea.value || deductionInput.value != 0) ? 'inline-flex' : 'none';
+                    btnDelete.style.display = !isEditing && (textarea.value || deductionInput.value != 0) ? 'inline-flex' : 'none';
+                    if (isEditing) textarea.focus();
+                };
+
+                btnEdit.onclick = () => setMode(true);
+                btnClose.onclick = () => { resolve(null); hideModal(); };
+                btnSave.onclick = () => { resolve({ comment: textarea.value, deduction: parseFloat(deductionInput.value) || 0 }); hideModal(); };
+                btnDelete.onclick = () => { resolve({ comment: '', deduction: 0 }); hideModal(); };
+                
+                setMode(!existingComment && !existingDeduction);
+
+                if (levelName) {
+                    const btnSaveCanned = document.getElementById('btnSaveCannedComment');
+                    const renderCannedList = () => {
+                        const listEl = document.getElementById('cannedCommentsList');
+                        if (!listEl) return;
+                        listEl.innerHTML = '';
+                        const comments = cannedCommentsData[rubricId]?.[criterionTitle]?.[levelName] || [];
+                        comments.forEach((comment, index) => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `<span>${comment}</span><button class="delete-canned" data-index="${index}">(x)</button>`;
+                            li.querySelector('span').addEventListener('click', () => {
+                                textarea.value = comment;
+                                setMode(true);
+                            });
+                            listEl.appendChild(li);
+                        });
+                    };
+                    renderCannedList();
+                    btnSaveCanned.addEventListener('click', () => {
+                        const text = textarea.value.trim();
+                        if (!text) return;
+
+                        cannedCommentsData[rubricId] = cannedCommentsData[rubricId] || {};
+                        cannedCommentsData[rubricId][criterionTitle] = cannedCommentsData[rubricId][criterionTitle] || {};
+                        cannedCommentsData[rubricId][criterionTitle][levelName] = cannedCommentsData[rubricId][criterionTitle][levelName] || [];
+                        const commentsList = cannedCommentsData[rubricId][criterionTitle][levelName];
+                        if (!commentsList.includes(text)) {
+                            commentsList.push(text);
+                            guardarCannedComments();
+                            renderCannedList();
+                        }
+                    });
+                    document.getElementById('cannedCommentsList').addEventListener('click', (e) => {
+                        if (e.target.classList.contains('delete-canned')) {
+                            const index = parseInt(e.target.dataset.index, 10);
+                            cannedCommentsData[rubricId][criterionTitle][levelName].splice(index, 1);
+                            guardarCannedComments();
+                            renderCannedList();
+                        }
+                    });
+                }
+            });
+        };
+
+        // --- Core App Logic & Rendering ---
+        function getActiveCourseState() {
+            return uiState.courseStates[uiState.cursoActivo] || { subgrupo: 'Todos', lastSelectedSubgroup: null, estudianteActivo: null, rubricaActiva: null, escenario: null, checkedStudents: [] };
+        }
+
+        function aplicarFiltrosYRenderizar() {
+            if (!uiState.cursoActivo) return;
+            const activeState = getActiveCourseState();
+            const estudiantes = cursosData[uiState.cursoActivo];
+            let estudiantesFiltrados = estudiantes;
+
+            listaContainer.classList.toggle('is-scrolling-table', activeState.subgrupo === 'Todos');
+            
+            if (activeState.subgrupo && activeState.subgrupo !== 'Todos') {
+                estudiantesFiltrados = estudiantes.filter(est => est.subgrupo === activeState.subgrupo);
+            }
+            
+            if (currentSearchValue) {
+                const busquedaLower = currentSearchValue.toLowerCase();
+                estudiantesFiltrados = estudiantesFiltrados.filter(est => 
+                    est.apellidos.toLowerCase().includes(busquedaLower) || 
+                    est.nombres.toLowerCase().includes(busquedaLower) || 
+                    est.correo.toLowerCase().includes(busquedaLower)
+                );
+            }
+            renderizarTabla(estudiantesFiltrados);
+        }
+        
+        function renderizarRubricaActiva() {
+            const activeState = getActiveCourseState();
+
+            const shouldShowPGRubric = activeState.rubricaActiva === 'PG' && activeState.subgrupo && activeState.subgrupo !== 'Todos';
+            const shouldShowPIRubric = activeState.rubricaActiva === 'PI' && activeState.estudianteActivo;
+
+            if (!shouldShowPGRubric && !shouldShowPIRubric) {
+                actualizarTituloSeguimiento();
+                return;
+            }
+            
+            if (shouldShowPGRubric) {
+                if (activeState.escenario === 'Entrega 1') renderRubricById('rubrica-grupal-e1');
+                else if (activeState.escenario === 'Entrega 2') renderRubricById('rubrica-grupal-e2');
+                else if (activeState.escenario === 'Entrega Final') renderRubricById('rubrica-grupal-ef');
+                else actualizarTituloSeguimiento(); 
+            } else if (shouldShowPIRubric) {
+                renderRubricById('rubrica-individual');
+            }
+        }
+
+        function renderizarCourseSelector() {
+            const container = document.getElementById('cursosListContainer');
+            if (!container) return;
+            container.innerHTML = '';
+            const nombresCursos = Object.keys(cursosData).sort();
+            
+            nombresCursos.forEach((nombreCurso) => {
+                const btn = document.createElement('button');
+                btn.className = 'curso-btn';
+                btn.textContent = nombreCurso;
+                if(nombreCurso === uiState.cursoActivo) btn.classList.add('active');
+                btn.addEventListener('click', () => mostrarCursoSeleccionado(nombreCurso));
+                container.appendChild(btn);
+            });
+        }
+        
+        function mostrarCursoSeleccionado(nombreCurso) { 
+            uiState.cursoActivo = nombreCurso;
+            if (!uiState.courseStates[nombreCurso]) {
+                uiState.courseStates[nombreCurso] = { subgrupo: 'Todos', lastSelectedSubgroup: null, estudianteActivo: null, rubricaActiva: null, escenario: null, checkedStudents: [] };
+            }
+            guardarUIState();
+            currentSearchValue = '';
+            
+            const estudiantes = cursosData[nombreCurso];
+            if (!estudiantes) return;
+            
+            const tableHeaderHTML = `
+                <thead>
+                    <tr><th colspan="14" class="borderless" style="height: 5px;"></th></tr>
+                    <tr>
+                        <th rowspan="2" class="sticky-col sticky-col-1 compact-header"><input type="checkbox" id="selectAllCheckbox"></th>
+                        <th rowspan="2" class="sticky-col sticky-col-2 compact-header" data-role="search-header">
+                            <span class="header-text">Apellidos</span>
+                        </th>
+                        <th rowspan="2" id="nombresHeader" class="sticky-col sticky-col-3 compact-header" data-role="search-header">
+                             <span class="header-text">Nombres <span id="toggleEmailBtn">+</span></span>
+                        </th>
+                        <th rowspan="2" class="email-col compact-header sticky-col-4">Correo</th>
+                        <th rowspan="2" class="compact-header">G</th>
+                        
+                        <th colspan="3" class="clickable-header" data-escenario="Entrega 1">E1</th>
+                        <th colspan="3" class="clickable-header" data-escenario="Entrega 2">E2</th>
+                        <th colspan="3" class="clickable-header" data-escenario="Entrega Final">EF</th>
+                    </tr>
+                    <tr>
+                        <th class="clickable-header compact-header" data-tipo="PG" data-escenario="Entrega 1" title="Entrega 1 - Puntaje Grupal"><span class="tipo-tag">PG</span></th>
+                        <th class="clickable-header compact-header" data-tipo="PI" data-escenario="Entrega 1" title="Entrega 1 - Puntaje Individual"><span class="tipo-tag">PI</span></th>
+                        <th class="compact-header sum-col" title="Entrega 1 - Sumatoria">
+                            <span class="tipo-tag">&Sigma;</span>
+                            <button class="export-header-btn" data-escenario="Entrega 1" title="Exportar Totales E1">⬇️</button>
+                        </th>
+                        
+                        <th class="clickable-header compact-header" data-tipo="PG" data-escenario="Entrega 2" title="Entrega 2 - Puntaje Grupal"><span class="tipo-tag">PG</span></th>
+                        <th class="clickable-header compact-header" data-tipo="PI" data-escenario="Entrega 2" title="Entrega 2 - Puntaje Individual"><span class="tipo-tag">PI</span></th>
+                        <th class="compact-header sum-col" title="Entrega 2 - Sumatoria">
+                            <span class="tipo-tag">&Sigma;</span>
+                            <button class="export-header-btn" data-escenario="Entrega 2" title="Exportar Totales E2">⬇️</button>
+                        </th>
+
+                        <th class="clickable-header compact-header" data-tipo="PG" data-escenario="Entrega Final" title="Entrega Final - Puntaje Grupal"><span class="tipo-tag">PG</span></th>
+                        <th class="clickable-header compact-header" data-tipo="PI" data-escenario="Entrega Final" title="Entrega Final - Puntaje Individual"><span class="tipo-tag">PI</span></th>
+                        <th class="compact-header sum-col" title="Entrega Final - Sumatoria">
+                            <span class="tipo-tag">&Sigma;</span>
+                            <button class="export-header-btn" data-escenario="Entrega Final" title="Exportar Totales EF">⬇️</button>
+                        </th>
+                    </tr>
+                </thead>
+            `;
+
+            listaContainer.innerHTML = `
+                <div id="list-header">
+                    <div class="course-title-container">
+                        <h2 id="cursoNombre"></h2>
+                        <button id="renameCourseBtn" class="icon-btn" title="Renombrar curso">✏️</button>
+                    </div>
+                </div>
+                <div class="main-content-wrapper">
+                    <div class="tools-container">
+                        <div id="cursosListContainer"></div>
+                    </div>
+                     <div id="evaluacionContexto" style="padding: 0 16px 10px; flex-shrink: 0;"></div>
+                    <div class="table-wrapper">
+                        <table id="estudiantesTable" class="email-hidden">${tableHeaderHTML}<tbody></tbody></table>
+                    </div>
+                    <div id="resumenSection">
+                        <div class="resumen-header">
+                            <h5>Resumen</h5>
+                            <button id="copyResumenBtn" class="copy-btn" title="Copiar Resumen">📋</button>
+                        </div>
+                        <pre id="resumenContent"></pre>
+                    </div>
+                </div>`;
+
+            document.getElementById('cursoNombre').textContent = nombreCurso;
+            document.getElementById('renameCourseBtn').addEventListener('click', () => handleRenameCourse(nombreCurso));
+            document.getElementById('copyResumenBtn').addEventListener('click', copyResumenContent);
+            
+            renderizarCourseSelector();
+            renderizarFiltros(estudiantes);
+            aplicarFiltrosYRenderizar();
+            actualizarTituloSeguimiento();
+            actualizarEstadoBotones();
+            renderizarRubricaActiva();
+            
+            const table = document.getElementById('estudiantesTable');
+            
+            table.addEventListener('click', (e) => {
+                const exportBtn = e.target.closest('.export-header-btn');
+                if (exportBtn) {
+                    exportarEntregaCSV(exportBtn.dataset.escenario);
+                    return; 
+                }
+
+                if (e.target.id === 'toggleEmailBtn') {
+                    table.classList.toggle('email-hidden');
+                    e.target.textContent = table.classList.contains('email-hidden') ? '+' : '–';
+                    return;
+                }
+
+                const searchHeader = e.target.closest('[data-role="search-header"]');
+                if (searchHeader && e.target.classList.contains('header-text')) {
+                    activateSearch(searchHeader);
+                }
+                
+                const clickableHeader = e.target.closest('th.clickable-header');
+                if(clickableHeader) {
+                    const tipo = clickableHeader.dataset.tipo;
+                    const escenario = clickableHeader.dataset.escenario;
+                    const activeState = getActiveCourseState();
+                    
+                    activeState.escenario = escenario;
+
+                    if (tipo) {
+                        if (tipo === 'PI' && !activeState.estudianteActivo) {
+                           createModal({ title: 'Acción requerida', bodyHTML: '<p>Por favor, seleccione un estudiante de la lista antes de evaluar individualmente.</p>', footerButtons: [{ text: 'Aceptar' }] });
+                           return;
+                        }
+                        if (tipo === 'PG') {
+                            activeState.estudianteActivo = null; 
+                            activeState.checkedStudents = [];
+                        }
+                        activeState.rubricaActiva = tipo;
+                    } else { // Click on E1, E2, EF headers
+                        if (activeState.estudianteActivo) {
+                            activeState.rubricaActiva = 'PI';
+                        } else if (activeState.subgrupo && activeState.subgrupo !== 'Todos') {
+                            activeState.rubricaActiva = 'PG';
+                        } else {
+                            activeState.rubricaActiva = null;
+                        }
+                    }
+                    
+                    guardarUIState();
+                    aplicarFiltrosYRenderizar(); 
+                    actualizarEstadoBotones();
+                    renderizarRubricaActiva();
+                    actualizarTituloSeguimiento();
+                }
+            });
+
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            selectAllCheckbox.addEventListener('change', (e) => {
+                const checked = e.target.checked;
+                const checkboxes = document.querySelectorAll('.student-checkbox');
+                const studentIds = [];
+                checkboxes.forEach(cb => {
+                    cb.checked = checked;
+                    if(checked) studentIds.push(cb.dataset.studentId);
+                });
+                getActiveCourseState().checkedStudents = studentIds;
+                guardarUIState();
+            });
+
+            table.addEventListener('change', e => {
+                if (e.target.matches('.student-checkbox')) {
+                    const checkedStudents = Array.from(document.querySelectorAll('.student-checkbox:checked')).map(cb => cb.dataset.studentId);
+                    getActiveCourseState().checkedStudents = checkedStudents;
+                    guardarUIState();
+                }
+            });
+        }
+        
+        function activateSearch(headerCell) {
+            const activeInput = document.querySelector('.header-search-input');
+            if (activeInput && activeInput.parentElement !== headerCell) {
+                 activeInput.blur();
+            }
+            
+            const textSpan = headerCell.querySelector('.header-text');
+            let inputEl = headerCell.querySelector('.header-search-input');
+            
+            if (!inputEl) {
+                inputEl = document.createElement('input');
+                inputEl.type = 'search';
+                inputEl.className = 'header-search-input';
+                inputEl.placeholder = 'Buscar...';
+                headerCell.appendChild(inputEl);
+            }
+
+            textSpan.style.display = 'none';
+            inputEl.style.display = 'block';
+            inputEl.value = currentSearchValue;
+            inputEl.focus();
+            inputEl.select();
+
+            const onInput = () => {
+                currentSearchValue = inputEl.value;
+                aplicarFiltrosYRenderizar();
+            };
+            const onBlur = () => {
+                textSpan.style.display = 'inline-flex';
+                headerCell.removeChild(inputEl);
+            };
+            const onKeydown = (e) => {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                    inputEl.blur();
+                }
+            };
+
+            inputEl.addEventListener('input', onInput);
+            inputEl.addEventListener('blur', onBlur);
+            inputEl.addEventListener('keydown', onKeydown);
+        }
+
+        function renderizarTabla(estudiantes) {
+            const tableBody = document.querySelector('#estudiantesTable tbody');
+            if (!tableBody) return;
+            const activeState = getActiveCourseState();
+            tableBody.innerHTML = '';
+            
+            const getGroupScore = (studentId, subgrupo, escenario) => {
+                 const studentEval = evaluacionesData[uiState.cursoActivo]?.[escenario]?.[studentId];
+                 if(studentEval && typeof studentEval.pg_score !== 'undefined') return studentEval.pg_score;
+                 const groupEval = evaluacionesData[uiState.cursoActivo]?.[escenario]?.[subgrupo];
+                 return groupEval?.totalScore ?? '-';
+            };
+            const getIndividualScore = (estudianteId, escenario) => evaluacionesData[uiState.cursoActivo]?.[escenario]?.[estudianteId]?.pi_score ?? '-';
+            const isIndividuallyEvaluated = (estudianteId, escenario) => !!evaluacionesData[uiState.cursoActivo]?.[escenario]?.[estudianteId]?.ind_eval;
+            
+            const calculateSum = (pg, pi) => {
+                const pgNum = parseFloat(pg);
+                const piNum = parseFloat(pi);
+                const pgVal = isNaN(pgNum) ? 0 : pgNum;
+                const piVal = isNaN(piNum) ? 0 : piNum;
+                if (isNaN(pgNum) && isNaN(piNum)) return '-';
+                return pgVal + piVal;
+            };
+
+
+            estudiantes.forEach((est) => {
+                const fila = document.createElement('tr');
+                fila.dataset.studentId = est.correo;
+                if (est.correo === activeState.estudianteActivo) {
+                    fila.classList.add('active-student');
+                }
+                
+                const e1_pg = getGroupScore(est.correo, est.subgrupo, "Entrega 1");
+                const e2_pg = getGroupScore(est.correo, est.subgrupo, "Entrega 2");
+                const ef_pg = getGroupScore(est.correo, est.subgrupo, "Entrega Final");
+                const e1_pi = getIndividualScore(est.correo, "Entrega 1");
+                const e2_pi = getIndividualScore(est.correo, "Entrega 2");
+                const ef_pi = getIndividualScore(est.correo, "Entrega Final");
+                
+                const e1_sum = calculateSum(e1_pg, e1_pi);
+                const e2_sum = calculateSum(e2_pg, e2_pi);
+                const ef_sum = calculateSum(ef_pg, ef_pi);
+                
+                const e1_pi_eval_class = isIndividuallyEvaluated(est.correo, "Entrega 1") ? 'individually-evaluated' : '';
+                const e2_pi_eval_class = isIndividuallyEvaluated(est.correo, "Entrega 2") ? 'individually-evaluated' : '';
+                const ef_pi_eval_class = isIndividuallyEvaluated(est.correo, "Entrega Final") ? 'individually-evaluated' : '';
+
+                fila.innerHTML = `
+                    <td class="sticky-col sticky-col-1 text-center"><input type="checkbox" class="student-checkbox" data-student-id="${est.correo}"></td>
+                    <td class="clickable sticky-col sticky-col-2">${est.apellidos}</td>
+                    <td class="clickable sticky-col sticky-col-3">${est.nombres}</td>
+                    <td class="email-col sticky-col-4">${est.correo}</td>
+                    <td class="text-center">${est.subgrupo.replace('G', '')}</td>
+                    <td class="e1-col text-center">${e1_pg}</td><td class="e1-col text-center ${e1_pi_eval_class}">${e1_pi}</td><td class="e1-col text-center sum-col">${e1_sum}</td>
+                    <td class="e2-col text-center">${e2_pg}</td><td class="e2-col text-center ${e2_pi_eval_class}">${e2_pi}</td><td class="e2-col text-center sum-col">${e2_sum}</td>
+                    <td class="ef-col text-center">${ef_pg}</td><td class="ef-col text-center ${ef_pi_eval_class}">${ef_pi}</td><td class="ef-col text-center sum-col">${ef_sum}</td>
+                `;
+                
+                let clickTimer;
+                fila.querySelectorAll('.clickable').forEach(cell => {
+                    cell.addEventListener('click', () => {
+                        clearTimeout(clickTimer);
+                        clickTimer = setTimeout(() => {
+                            const studentId = est.correo;
+                            const currentState = getActiveCourseState();
+                            
+                            if (currentState.estudianteActivo === studentId) {
+                                currentState.estudianteActivo = null;
+                                currentState.rubricaActiva = null;
+                                currentState.checkedStudents = [];
+                            } else {
+                                currentState.estudianteActivo = studentId;
+                                if (currentState.escenario) {
+                                    currentState.rubricaActiva = 'PI';
+                                }
+                                currentState.checkedStudents = [studentId];
+                            }
+                            
+                            guardarUIState();
+                            aplicarFiltrosYRenderizar();
+                            actualizarTituloSeguimiento();
+                            renderizarRubricaActiva();
+                        }, 200);
+                    });
+
+                    cell.addEventListener('dblclick', () => {
+                        clearTimeout(clickTimer);
+                        const subgrupoBtn = document.querySelector(`.filtro-btn[title="${est.subgrupo}"]`);
+                        if(subgrupoBtn) subgrupoBtn.click();
+                    });
+                });
+                tableBody.appendChild(fila);
+            });
+            
+            const checkedStudents = activeState.checkedStudents || [];
+            if(checkedStudents.length > 0) {
+                 document.querySelectorAll('.student-checkbox').forEach(cb => {
+                    cb.checked = checkedStudents.includes(cb.dataset.studentId);
+                });
+            } else {
+                document.querySelectorAll('.student-checkbox').forEach(cb => cb.checked = true);
+                const selectAll = document.getElementById('selectAllCheckbox');
+                if (selectAll) selectAll.checked = true;
+            }
+        }
+
+        function renderizarFiltros(estudiantesDelCurso) {
+            const filtrosDiv = document.getElementById('filtrosContainer');
+            if (!filtrosDiv) return;
+            filtrosDiv.innerHTML = '';
+
+            const btnTodos = document.createElement('button');
+            btnTodos.textContent = 'T';
+            btnTodos.title = 'Todos';
+            btnTodos.id = 'todos-btn-filter';
+            btnTodos.className = 'filtro-btn';
+            btnTodos.dataset.grupo = 'Todos';
+            btnTodos.addEventListener('click', () => { 
+                const activeState = getActiveCourseState();
+                activeState.subgrupo = 'Todos'; 
+                activeState.lastSelectedSubgroup = null;
+                activeState.estudianteActivo = null;
+                activeState.rubricaActiva = null;
+                activeState.checkedStudents = [];
+                guardarUIState(); 
+                actualizarEstadoBotones(); 
+                aplicarFiltrosYRenderizar(); 
+                actualizarTituloSeguimiento();
+            });
+            filtrosDiv.appendChild(btnTodos);
+            
+            const subgrupos = [...new Set(estudiantesDelCurso.map(est => est.subgrupo))].sort(naturalSort);
+            subgrupos.forEach((subgrupo) => {
+                const btnFiltro = document.createElement('button');
+                btnFiltro.textContent = subgrupo.replace('G', '');
+                btnFiltro.title = subgrupo;
+                btnFiltro.className = 'filtro-btn';
+                btnFiltro.dataset.grupo = subgrupo;
+
+                btnFiltro.addEventListener('click', (e) => { 
+                    const activeState = getActiveCourseState();
+                    activeState.subgrupo = subgrupo;
+                    activeState.lastSelectedSubgroup = subgrupo;
+                    activeState.estudianteActivo = null; 
+                    activeState.checkedStudents = [];
+                    if (activeState.escenario) {
+                        activeState.rubricaActiva = 'PG';
+                    } else {
+                         activeState.rubricaActiva = null;
+                    }
+                    guardarUIState(); 
+                    
+                    actualizarEstadoBotones(); 
+                    aplicarFiltrosYRenderizar(); 
+                    actualizarTituloSeguimiento(); 
+                    renderizarRubricaActiva();
+                });
+                filtrosDiv.appendChild(btnFiltro);
+            });
+            actualizarEstadoBotones();
+        }
+        
+        function updateSubgroupCompletionStatus(){
+            const activeState = getActiveCourseState();
+            const escenario = activeState.escenario;
+            if(!escenario || !cursosData[uiState.cursoActivo]) return;
+
+            const subgrupos = [...new Set(cursosData[uiState.cursoActivo].map(est => est.subgrupo))];
+            
+            subgrupos.forEach(subgrupo => {
+                const btn = document.querySelector(`.filtro-btn[title="${subgrupo}"]`);
+                if(!btn) return;
+                
+                const miembros = cursosData[uiState.cursoActivo].filter(est => est.subgrupo === subgrupo);
+                const todosEvaluados = miembros.every(miembro => {
+                     const evalData = evaluacionesData[uiState.cursoActivo]?.[escenario]?.[miembro.correo];
+                     return evalData && typeof evalData.pg_score !== 'undefined' && typeof evalData.pi_score !== 'undefined';
+                });
+                
+                btn.classList.toggle('completed', todosEvaluados);
+            });
+        }
+
+        function actualizarEstadoBotones() {
+            renderizarCourseSelector();
+            const activeState = getActiveCourseState();
+            
+            document.querySelectorAll('#filtrosContainer .filtro-btn').forEach(btn => {
+                btn.classList.remove('completed');
+                btn.classList.toggle('active', btn.dataset.grupo === activeState.subgrupo);
+            });
+            actualizarDestacadosDeEncabezado();
+            updateSubgroupCompletionStatus();
+        }
+        
+        function actualizarDestacadosDeEncabezado() {
+            document.querySelectorAll('th.highlight-col').forEach(th => th.classList.remove('highlight-col'));
+            
+            const activeState = getActiveCourseState();
+            if (activeState.escenario && activeState.rubricaActiva) {
+                const header = document.querySelector(`th[data-escenario="${activeState.escenario}"][data-tipo="${activeState.rubricaActiva}"]`);
+                if(header) header.classList.add('highlight-col');
+            }
+        }
+        
+        function actualizarTituloSeguimiento() {
+            const contextoHeader = document.getElementById('evaluacionContexto');
+            const seguimientoPanelContent = document.getElementById('seguimientoContent');
+            const btnGuardar = btnGuardarEvaluacionHeader;
+            const bulkSelector = document.querySelector('.bulk-level-selector');
+
+            if(!seguimientoPanelContent) return;
+            
+            const activeState = getActiveCourseState();
+
+            seguimientoPanelContent.innerHTML = '<p style="color: #6c757d;">Seleccione una acción para comenzar.</p>';
+            let contextText = ''; let showConfirmBtn = false;
+
+            if(activeState.subgrupo === 'Todos') {
+                contextText = `Lista General Curso <b>${uiState.cursoActivo}</b>`;
+            } else if (activeState.escenario) { 
+                contextText += `<b>${activeState.escenario}</b>`;
+            }
+
+            if (activeState.rubricaActiva) {
+                contextText += contextText ? ' | ' : '';
+                if (activeState.rubricaActiva === 'PG' && activeState.subgrupo !== 'Todos') {
+                    contextText = `<b>${activeState.escenario}</b> | Grupo: <b>${activeState.subgrupo}</b> | Rúbrica: <b>Grupal</b>`;
+                    showConfirmBtn = true;
+                } else if (activeState.rubricaActiva === 'PI' && activeState.estudianteActivo) {
+                    const student = cursosData[uiState.cursoActivo].find(s => s.correo === activeState.estudianteActivo);
+                    contextText = `<b>${activeState.escenario}</b> | Estudiante: <b>${student.nombres.split(' ')[0]} ${student.apellidos.split(' ')[0]}</b> | Grupo: <b>${student.subgrupo.replace('G','')}</b> | Rúbrica: <b>Individual</b>`;
+                    showConfirmBtn = true;
+                }
+            }
+            
+            if (showConfirmBtn && activeState.rubricaActiva) {
+                 seguimientoPanelContent.innerHTML = '';
+                 bulkSelector.style.display = 'flex';
+                 document.querySelectorAll('input[name="bulk-level"]').forEach(radio => radio.checked = false);
+            } else {
+                 bulkSelector.style.display = 'none';
+                 if (activeState.estudianteActivo && activeState.subgrupo !== 'Todos') {
+                     const student = cursosData[uiState.cursoActivo].find(s => s.correo === activeState.estudianteActivo);
+                     seguimientoPanelContent.innerHTML = `<p style="color: #6c757d;">Estudiante <b>${student.nombres} ${student.apellidos}</b> seleccionado. <br>Haga clic en una columna de entrega (p. ej. PG) para evaluar.</p>`;
+                } else if (activeState.subgrupo && activeState.subgrupo !== 'Todos') {
+                     seguimientoPanelContent.innerHTML = '<p style="color: #6c757d;">Haga clic en una cabecera de Entrega (p. ej. E2 PG) para mostrar la Rúbrica Grupal.</p>';
+                }
+            }
+            
+            if(contextoHeader) contextoHeader.innerHTML = contextText;
+            if(btnGuardar) btnGuardar.style.display = showConfirmBtn ? 'block' : 'none';
+            actualizarPuntuacionTotal();
+            checkEvaluationCompleteness();
+            actualizarResumen();
+            resetHistory();
+        }
+        
+        // --- Rúbrica Logic ---
+        function getDefaultRubrics() {
+            return {
+                'rubrica-grupal-e1': { 'Justificación': { maxPoints: 2, levels: [0, 1, 2], descs: ['No incluye o es muy deficiente.', 'Justificación básica.', 'Justificación clara y convincente.'] }, 'Objetivos': { maxPoints: 3, levels: [1, 2, 3], descs: ['No define, vagos o inalcanzables.', 'Objetivos claros y alcanzables.', 'Objetivos SMART.'] }, 'Requerimientos': { maxPoints: 10, levels: [4, 8, 10], descs: ['Lista incompleta o confusa.', 'Identifica la mayoría.', 'Identifica exhaustivamente todos.'] }, 'Flujo de Navegación': { maxPoints: 30, levels: [9, 20, 30], descs: ['Confuso o incompleto.', 'Flujo funcional y comprensible.', 'Flujo completo, claro y detallado.'] }, 'Mockups y Wireframes': { maxPoints: 30, levels: [9, 20, 30], descs: ['Básicos o de baja calidad.', 'Mockups funcionales.', 'Mockups completos y profesionales.'] } },
+                'rubrica-grupal-e2': { 'Atención de ajustes del tutor': { maxPoints: 5, levels: [1, 3, 5], descs: ['Menos del 70% de comentarios atendidos, ajustes superficiales o incompletos.', 'Se atendió el 70-90% de los comentarios con algunos detalles pendientes.', 'Todos los comentarios se atendieron de manera completa y pertinente.'] }, 'Flujo de navegación y mockups': { maxPoints: 10, levels: [4, 7, 10], descs: ['Flujo confuso, incompleto o sin lógica clara.', 'Flujo comprensible con inconsistencias menores.', 'Flujo completo, lógico e intuitivo con mockups bien diseñados.'] }, 'Requerimientos actualizados': { maxPoints: 10, levels: [4, 7, 10], descs: ['Incompletos, desactualizados o mal redactados.', 'Presentes y actualizados, pero con falta de claridad o detalle.', 'Completos, bien redactados, actualizados y coherentes.'] }, 'Implementación de interfaces (70%)': { maxPoints: 20, levels: [9, 15, 20], descs: ['Menos del 60% de interfaces, errores significativos.', '60-89% de interfaces, errores menores.', '90-100% de interfaces, navegación correcta.'] }, 'Desarrollo de requerimientos': { maxPoints: 30, levels: [14, 23, 30], descs: ['Menos del 50% implementado, errores significativos.', '50-79% implementado, lógica con errores menores.', '80-100% implementado, lógica correcta y buenas prácticas.'] } },
+                'rubrica-grupal-ef': { 'Video': { maxPoints: 10, levels: [4, 7, 10], descs: ['El video no es claro, no muestra toda la funcionalidad o tiene mala calidad.', 'El video es claro, pero no cubre toda la funcionalidad o tiene detalles de calidad.', 'Video claro, conciso, que demuestra toda la funcionalidad principal.'] }, 'Cumplimiento de Requerimientos': { maxPoints: 40, levels: [10, 25, 40], descs: ['Menos del 70% de los requerimientos funcionales implementados.', 'Entre el 70% y 90% de los requerimientos funcionales implementados.', 'Más del 90% de los requerimientos funcionales implementados.'] }, 'Calidad del Código y Arquitectura': { maxPoints: 15, levels: [5, 10, 15], descs: ['El código es desorganizado, difícil de leer o no sigue patrones de arquitectura.', 'El código es legible y sigue principios básicos de arquitectura, pero tiene áreas de mejora.', 'Código limpio, bien documentado y sigue patrones de arquitectura MVC/MVVM.'] }, 'Arte Final y Experiencia de Usuario': { maxPoints: 10, levels: [4, 7, 10], descs: ['La interfaz es poco atractiva, inconsistente o difícil de usar.', 'La interfaz es funcional y consistente, pero visualmente simple.', 'Interfaz atractiva, consistente y ofrece una excelente experiencia de usuario.'] } },
+                'rubrica-individual': { 'Calidad y Cumplimiento de Entregas': { maxPoints: 30, levels: [10, 20, 30], descs: ['Entrega deficiente, numerosos errores, no cumple especificaciones.', 'Entrega la mayoría con calidad aceptable, funcional pero mejorable.', 'Entrega todos los componentes con alta calidad, sin errores significativos.'] }, 'Compromiso y Responsabilidad': { maxPoints: 20, levels: [6, 13, 20], descs: ['No cumple plazos, ausencias frecuentes, falta de compromiso.', 'Cumple la mayoría de plazos, asiste a reuniones, compromiso básico.', 'Cumple puntualmente, asistencia perfecta, iniciativa y compromiso excepcional.'] }, 'Colaboración y Trabajo en Equipo': { maxPoints: 15, levels: [5, 10, 15], descs: ['No colabora o lo hace de manera conflictiva.', 'Colabora adecuadamente, comunicación respetuosa.', 'Colabora activamente, apoya proactivamente y resuelve conflictos.'] }, 'Aporte e Innovación': { maxPoints: 10, levels: [3, 6, 10], descs: ['No aporta ideas o son irrelevantes.', 'Aporta ideas ocasionales útiles para el proyecto.', 'Aporta ideas originales y valiosas que enriquecen el proyecto.'] } }
+            };
+        }
+
+        function getRubricDefinition(rubricId) {
+            if (!rubricDefinitionsData[rubricId]) {
+                const defaults = getDefaultRubrics();
+                rubricDefinitionsData[rubricId] = defaults[rubricId];
+                guardarRubricDefinitions();
+            }
+            return rubricDefinitionsData[rubricId];
+        }
+
+        function crearCriterioHTML(rubricId, criterionTitle, criterionData) {
+            const { maxPoints, levels, descs } = criterionData;
+            return `
+                <div class="criterio-evaluacion" data-criterio-titulo="${criterionTitle}" data-rubric-id="${rubricId}">
+                    <div class="criterio-header">
+                        <h5>${criterionTitle} <span class="comment-indicator">📣</span> (<span class="max-points">${maxPoints}</span>)</h5>
+                        <button class="icon-btn btn-comment" title="Añadir/Editar Comentario">📝</button>
+                        <span class="puntos-obtenidos" contenteditable="true">0</span>
+                        <button class="icon-btn btn-reset" title="Resetear Criterio">🔄</button>
+                    </div>
+                    <div class="niveles">
+                        <span class="nivel" data-level-index="0">
+                            <div class="level-header">
+                                <span class="level-points-container">${levels[0]}</span>
+                                <span class="level-title-rotated">I</span>
+                            </div>
+                            <div class="level-description-container">
+                                <span class="description">${descs[0]}</span><span class="deduction-display"></span>
+                            </div>
+                        </span>
+                        <span class="nivel" data-level-index="1">
+                            <div class="level-header">
+                                <span class="level-points-container">${levels[1]}</span>
+                                <span class="level-title-rotated">A</span>
+                            </div>
+                            <div class="level-description-container">
+                                <span class="description">${descs[1]}</span><span class="deduction-display"></span>
+                            </div>
+                        </span>
+                        <span class="nivel" data-level-index="2">
+                             <div class="level-header">
+                                <span class="level-points-container">${levels[2]}</span>
+                                <span class="level-title-rotated">E</span>
+                            </div>
+                            <div class="level-description-container">
+                                <span class="description">${descs[2]}</span><span class="deduction-display"></span>
+                            </div>
+                        </span>
+                    </div>
+                </div>`;
+        }
+        
+        function renderRubricById(rubricId) {
+            const rubricData = getRubricDefinition(rubricId);
+            seguimientoContent.dataset.rubricId = rubricId;
+            let html = '';
+            for (const criterionTitle in rubricData) {
+                html += crearCriterioHTML(rubricId, criterionTitle, rubricData[criterionTitle]);
+            }
+            seguimientoContent.innerHTML = html;
+            
+            cargarEstadoRubrica();
+            resetHistory();
+            pushState(); // Push initial state
+        }
+
+        function actualizarIndicadorComentario(criterioEl) {
+            const indicator = criterioEl.querySelector('.comment-indicator');
+            if (indicator) {
+                const hasComment = (criterioEl.dataset.comment && criterioEl.dataset.comment.trim() !== '') || (criterioEl.dataset.deduction && parseFloat(criterioEl.dataset.deduction) !== 0);
+                indicator.style.display = hasComment ? 'inline' : 'none';
+                criterioEl.querySelector('.btn-comment').style.color = hasComment ? 'var(--primary-color)' : 'var(--secondary-color)';
+            }
+        }
+        
+        function updateDeductionDisplay(criterioEl) {
+            criterioEl.querySelectorAll('.deduction-display').forEach(el => el.textContent = '');
+            const deduction = parseFloat(criterioEl.dataset.deduction);
+            if(deduction > 0) {
+                const selectedLevel = criterioEl.querySelector('.nivel.selected');
+                if(selectedLevel) {
+                    const display = selectedLevel.querySelector('.deduction-display');
+                    if(display) display.textContent = ` (-${deduction})`;
+                }
+            }
+        }
+
+        function checkEvaluationCompleteness() {
+            const warningEl = document.getElementById('evaluationWarning');
+            if (!warningEl) return;
+            const criterios = seguimientoContent.querySelectorAll('.criterio-evaluacion');
+            if (criterios.length === 0) {
+                warningEl.style.display = 'none'; return;
+            }
+            let isComplete = true;
+            criterios.forEach(criterio => {
+                const hasSelection = !!criterio.querySelector('.nivel.selected') || (parseFloat(criterio.querySelector('.puntos-obtenidos').textContent) > 0);
+                criterio.classList.toggle('unevaluated', !hasSelection);
+                if (!hasSelection && parseFloat(criterio.querySelector('.max-points').textContent) > 0) isComplete = false;
+            });
+            warningEl.style.display = isComplete ? 'none' : 'inline';
+        }
+
+        function cargarEstadoRubrica() {
+            const activeState = getActiveCourseState();
+            let savedEval;
+            const targetId = activeState.rubricaActiva === 'PI' ? activeState.estudianteActivo : activeState.subgrupo;
+
+            if (targetId) {
+                savedEval = activeState.rubricaActiva === 'PI'
+                    ? evaluacionesData[uiState.cursoActivo]?.[activeState.escenario]?.[targetId]?.ind_eval
+                    : evaluacionesData[uiState.cursoActivo]?.[activeState.escenario]?.[targetId];
+            }
+            
+            seguimientoContent.querySelectorAll('.criterio-evaluacion').forEach(criterioEl => {
+                const titulo = criterioEl.dataset.criterioTitulo;
+                const critData = savedEval?.criteria?.[titulo];
+                
+                if (critData) {
+                    criterioEl.querySelector('.puntos-obtenidos').textContent = critData.selectedPoints;
+                    criterioEl.dataset.basePoints = critData.basePoints;
+                    criterioEl.dataset.comment = critData.comment || '';
+                    criterioEl.dataset.deduction = critData.deduction || 0;
+                    
+                    if (critData.basePoints !== null && typeof critData.basePoints !== 'undefined') {
+                       const nivel = Array.from(criterioEl.querySelectorAll('.nivel')).find(n => parseFloat(n.querySelector('.level-points-container').textContent) === critData.basePoints);
+                       if (nivel) nivel.classList.add('selected');
+                    }
+                } else {
+                    criterioEl.querySelector('.puntos-obtenidos').textContent = '0';
+                    criterioEl.querySelectorAll('.nivel.selected').forEach(n => n.classList.remove('selected'));
+                    delete criterioEl.dataset.basePoints; 
+                    delete criterioEl.dataset.comment;
+                    delete criterioEl.dataset.deduction;
+                }
+                actualizarIndicadorComentario(criterioEl);
+                updateDeductionDisplay(criterioEl);
+            });
+            actualizarPuntuacionTotal();
+            checkEvaluationCompleteness();
+            actualizarResumen();
+        }
+        
+        function actualizarPuntuacionTotal() {
+            let total = 0;
+            seguimientoContent.querySelectorAll('.puntos-obtenidos').forEach(span => {
+                total += parseFloat(span.textContent) || 0;
+            });
+            const totalPuntosEl = document.getElementById('totalPuntos');
+            if (totalPuntosEl) totalPuntosEl.textContent = `Total: ${total}`;
+        }
+        
+        function updateCriterionScore(criterioEl) {
+            const basePoints = parseFloat(criterioEl.dataset.basePoints) || 0;
+            const deduction = parseFloat(criterioEl.dataset.deduction) || 0;
+            const finalScore = basePoints - deduction;
+            criterioEl.querySelector('.puntos-obtenidos').textContent = finalScore;
+            actualizarPuntuacionTotal();
+            checkEvaluationCompleteness();
+            updateDeductionDisplay(criterioEl);
+            actualizarResumen();
+        }
+
+        function saveEvaluation() {
+            const activeState = getActiveCourseState();
+            const { cursoActivo } = uiState;
+            const { subgrupo, estudianteActivo, rubricaActiva, escenario } = activeState;
+            
+            if (!cursoActivo || !escenario || (rubricaActiva === 'PG' && subgrupo === 'Todos') || (rubricaActiva === 'PI' && !estudianteActivo)) return;
+
+            const evaluacionActual = { criteria: {} };
+            const criterios = seguimientoContent.querySelectorAll('.criterio-evaluacion');
+            if (criterios.length === 0) { 
+                createModal({ title: 'Atención', bodyHTML: '<p>No hay rúbrica cargada.</p>', footerButtons: [{ text: 'Aceptar' }] });
+                return; 
+            }
+            
+            criterios.forEach(criterio => {
+                const titulo = criterio.dataset.criterioTitulo;
+                if (!titulo) return;
+                evaluacionActual.criteria[titulo] = {
+                    selectedPoints: parseFloat(criterio.querySelector('.puntos-obtenidos').textContent) || 0,
+                    basePoints: criterio.dataset.basePoints ? parseFloat(criterio.dataset.basePoints) : null,
+                    comment: criterio.dataset.comment || '',
+                    deduction: criterio.dataset.deduction ? parseFloat(criterio.dataset.deduction) : 0
+                };
+            });
+            const totalScore = parseFloat(document.getElementById('totalPuntos').textContent.split(':')[1]) || 0;
+            evaluacionActual.totalScore = totalScore;
+            
+            if (!evaluacionesData[cursoActivo]) evaluacionesData[cursoActivo] = {};
+            if (!evaluacionesData[cursoActivo][escenario]) evaluacionesData[cursoActivo][escenario] = {};
+            const escenarioData = evaluacionesData[cursoActivo][escenario];
+
+            if (rubricaActiva === 'PI') {
+                const studentsToGrade = activeState.checkedStudents || [];
+                studentsToGrade.forEach(studentId => {
+                     if(!escenarioData[studentId]) escenarioData[studentId] = {};
+                    escenarioData[studentId].pi_score = totalScore;
+                    escenarioData[studentId].ind_eval = JSON.parse(JSON.stringify(evaluacionActual));
+                });
+            } else { // PG
+                escenarioData[subgrupo] = evaluacionActual;
+                document.querySelectorAll('.student-checkbox').forEach(checkbox => {
+                    const studentId = checkbox.dataset.studentId;
+                    if (!escenarioData[studentId]) {
+                         escenarioData[studentId] = {};
+                    }
+                    escenarioData[studentId].pg_score = checkbox.checked ? totalScore : 1;
+                });
+            }
+
+            guardarEvaluacionesData();
+            aplicarFiltrosYRenderizar();
+            actualizarEstadoBotones();
+        }
+        
+        function mostrarEstadoVacio() {
+            const container = document.getElementById('listaContainer');
+            if (container) container.innerHTML = '<div style="text-align:center; margin: auto;"><h2>Bienvenido</h2><p>Use el menú ⚙️ para cargar un curso.</p></div>';
+        }
+        
+        function handleRenameCourse(oldName) {
+            createModal({
+                title: 'Renombrar Curso',
+                bodyHTML: `
+                    <p>Ingrese el nuevo nombre para el curso "<strong>${oldName}</strong>".</p>
+                    <input type="text" id="newCourseNameInput" value="${oldName}" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">`,
+                footerButtons: [
+                    { text: 'Cancelar', classes: ['secondary'] },
+                    { text: 'Guardar', id: 'btnConfirmRename', onClick: () => {
+                        const newNameInput = document.getElementById('newCourseNameInput');
+                        const newName = newNameInput.value.trim();
+                        const errorEl = document.createElement('p');
+                        errorEl.style.color = 'var(--danger-color)';
+                        errorEl.style.marginTop = '8px';
+                        errorEl.style.fontSize = '0.9em';
+                        newNameInput.parentElement.appendChild(errorEl);
+
+                        if (!newName) {
+                            errorEl.textContent = 'El nombre no puede estar vacío.'; return;
+                        }
+                        if (newName !== oldName && cursosData[newName]) {
+                            errorEl.textContent = 'Ya existe un curso con ese nombre.'; return;
+                        }
+
+                        if (newName !== oldName) {
+                            cursosData[newName] = cursosData[oldName]; delete cursosData[oldName];
+                            if (evaluacionesData[oldName]) { evaluacionesData[newName] = evaluacionesData[oldName]; delete evaluacionesData[oldName]; }
+                            if (uiState.courseStates[oldName]) { uiState.courseStates[newName] = uiState.courseStates[oldName]; delete uiState.courseStates[oldName]; }
+                            
+                            uiState.cursoActivo = newName;
+                            guardarDatosEnStorage();
+                            guardarEvaluacionesData();
+                            guardarUIState();
+                        }
+                        hideModal();
+                        mostrarCursoSeleccionado(newName);
+                    }}
+                ]
+            });
+            const input = document.getElementById('newCourseNameInput');
+            input.focus(); input.select();
+        }
+
+        function inicializarApp() { 
+            cursosData = cargarDatosDesdeStorage(); 
+            evaluacionesData = cargarEvaluacionesData();
+            cannedCommentsData = cargarCannedComments();
+            rubricDefinitionsData = cargarRubricDefinitions();
+            const savedUIState = cargarUIState() || {};
+            uiState = { cursoActivo: null, courseStates: {}, ...savedUIState };
+            
+            if (Object.keys(cursosData).length > 0) {
+                if (uiState.cursoActivo && cursosData[uiState.cursoActivo]) {
+                    mostrarCursoSeleccionado(uiState.cursoActivo);
+                } else {
+                    const primerCurso = Object.keys(cursosData).sort()[0];
+                    mostrarCursoSeleccionado(primerCurso); 
+                }
+            } else {
+                mostrarEstadoVacio();
+            }
+        }
+        
+        function actualizarResumen() {
+            const resumenContent = document.getElementById('resumenContent');
+            const resumenSection = document.getElementById('resumenSection');
+            if(!resumenContent || !resumenSection) return;
+
+            const activeState = getActiveCourseState();
+            const showResumen = activeState.subgrupo !== 'Todos' && (activeState.rubricaActiva === 'PG' || activeState.rubricaActiva === 'PI');
+            resumenSection.style.display = showResumen ? 'flex' : 'none';
+
+            const criterios = seguimientoContent.querySelectorAll('.criterio-evaluacion');
+            if(criterios.length === 0 || !showResumen) {
+                resumenContent.textContent = '';
+                return;
+            }
+
+            let summaryText = 'NIVELES: I=Insuficiente, A=Aceptable, E=Excelente\n\n';
+            criterios.forEach((criterio, index) => {
+                const titulo = criterio.dataset.criterioTitulo;
+                const rubricId = criterio.dataset.rubricId;
+                const critDef = rubricDefinitionsData[rubricId][titulo];
+                const nivelAsignadoEl = criterio.querySelector('.nivel.selected');
+                const nivelAsignado = nivelAsignadoEl ? nivelAsignadoEl.querySelector('.level-title-rotated').textContent.trim() : 'N/A';
+                const puntosAsignados = criterio.querySelector('.puntos-obtenidos').textContent.trim();
+                const descripcion = nivelAsignadoEl ? nivelAsignadoEl.querySelector('.description').textContent.trim() : '';
+                const comentario = criterio.dataset.comment || '';
+                const descuento = parseFloat(criterio.dataset.deduction) || 0;
+
+                summaryText += `Criterio ${index + 1} (${titulo}): I(${critDef.levels[0]}), A(${critDef.levels[1]}), E(${critDef.levels[2]})\n`;
+                summaryText += `Nivel Alcanzado: ${nivelAsignado} (${puntosAsignados} Puntos)\n`;
+                
+                let commentLine = '';
+                if (descripcion) {
+                    commentLine += `${descripcion}. `;
+                }
+
+                if (comentario || descuento > 0) {
+                    if (comentario) {
+                        commentLine += comentario;
+                    }
+                    if (descuento > 0) {
+                        commentLine += ` (-${descuento} pts)`;
+                    }
+                }
+                
+                if (commentLine.trim()) {
+                    summaryText += `${commentLine.trim()}\n`;
+                }
+
+                summaryText += '--\n';
+            });
+            resumenContent.textContent = summaryText;
+        }
+
+        function copyResumenContent() {
+            const resumenContent = document.getElementById('resumenContent');
+            const copyBtn = document.getElementById('copyResumenBtn');
+            if (resumenContent && copyBtn) {
+                navigator.clipboard.writeText(resumenContent.textContent).then(() => {
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = '✅';
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                    }, 1500);
+                }).catch(err => {
+                    console.error('Error al copiar: ', err);
+                });
+            }
+        }
+        
+        function exportarEntregaCSV(escenario) {
+            const cursoActual = cursosData[uiState.cursoActivo];
+            if (!cursoActual) return;
+            
+            const calculateSum = (pg, pi) => {
+                const pgNum = parseFloat(pg);
+                const piNum = parseFloat(pi);
+                const pgVal = isNaN(pgNum) ? 0 : pgNum;
+                const piVal = isNaN(piNum) ? 0 : piNum;
+                if (isNaN(pgNum) && isNaN(piNum)) return 0;
+                return pgVal + piVal;
+            };
+
+            let csvContent = (escenario === 'Entrega Final') ? "200.00\n" : "150.00\n";
+
+            cursoActual.forEach(student => {
+                const studentId = student.correo;
+                const evalData = evaluacionesData[uiState.cursoActivo]?.[escenario]?.[studentId] || {};
+                const pgScore = evalData.pg_score ?? '';
+                const piScore = evalData.pi_score ?? '';
+                const total = calculateSum(pgScore, piScore);
+                
+                const row = `${total}\n`;
+                csvContent += row;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8,' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `${uiState.cursoActivo}_${escenario.replace(' ', '_')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // --- Undo/Redo Functions ---
+        const captureState = () => {
+            const state = [];
+            seguimientoContent.querySelectorAll('.criterio-evaluacion').forEach(c => {
+                state.push({
+                    titulo: c.dataset.criterioTitulo,
+                    basePoints: c.dataset.basePoints,
+                    comment: c.dataset.comment,
+                    deduction: c.dataset.deduction,
+                    finalScore: c.querySelector('.puntos-obtenidos').textContent
+                });
+            });
+            return state;
+        };
+
+        const restoreState = (state) => {
+            if(!state) return;
+            state.forEach(critState => {
+                const criterioEl = seguimientoContent.querySelector(`[data-criterio-titulo="${critState.titulo}"]`);
+                if(criterioEl) {
+                    criterioEl.dataset.basePoints = critState.basePoints || '';
+                    criterioEl.dataset.comment = critState.comment || '';
+                    criterioEl.dataset.deduction = critState.deduction || '0';
+                    criterioEl.querySelector('.puntos-obtenidos').textContent = critState.finalScore;
+
+                    criterioEl.querySelectorAll('.nivel.selected').forEach(n => n.classList.remove('selected'));
+                    if(critState.basePoints) {
+                        const nivel = Array.from(criterioEl.querySelectorAll('.nivel')).find(n => parseFloat(n.querySelector('.level-points-container').textContent) == critState.basePoints);
+                        if(nivel) nivel.classList.add('selected');
+                    }
+                    actualizarIndicadorComentario(criterioEl);
+                    updateDeductionDisplay(criterioEl);
+                }
+            });
+            actualizarPuntuacionTotal();
+            checkEvaluationCompleteness();
+            actualizarResumen();
+        };
+
+        const updateHistoryButtons = () => {
+            undoBtn.disabled = historyIndex <= 0;
+            redoBtn.disabled = historyIndex >= historyBuffer.length - 1;
+        };
+
+        const pushState = () => {
+            historyBuffer = historyBuffer.slice(0, historyIndex + 1);
+            const newState = captureState();
+            historyBuffer.push(newState);
+            if (historyBuffer.length > MAX_HISTORY + 1) {
+                historyBuffer.shift();
+            }
+            historyIndex = historyBuffer.length - 1;
+            updateHistoryButtons();
+        };
+
+        const resetHistory = () => {
+            historyBuffer = [];
+            historyIndex = -1;
+            updateHistoryButtons();
+        };
+
+        const undo = () => {
+            if (historyIndex > 0) {
+                historyIndex--;
+                restoreState(historyBuffer[historyIndex]);
+                updateHistoryButtons();
+            }
+        };
+
+        const redo = () => {
+            if (historyIndex < historyBuffer.length - 1) {
+                historyIndex++;
+                restoreState(historyBuffer[historyIndex]);
+                updateHistoryButtons();
+            }
+        };
+        
+        undoBtn.addEventListener('click', undo);
+        redoBtn.addEventListener('click', redo);
+
+        // --- Sidebar Button Handlers ---
+        const selectFileBtn = document.getElementById('selectFileBtn');
+        const csvFileInput = document.getElementById('csvFile');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const crearListaBtn = document.getElementById('crearListaBtn');
+        const exportarBtn = document.getElementById('exportarBtn');
+        const importarBtn = document.getElementById('importarBtn');
+        const importFileInput = document.getElementById('importFile');
+        const borrarBtn = document.getElementById('borrarBtn');
+        
+        selectFileBtn.addEventListener('click', () => csvFileInput.click());
+        csvFileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) { const file = e.target.files[0]; fileNameDisplay.textContent = file.name; const reader = new FileReader(); reader.onload = (ev) => { datosCsvTemporales = ev.target.result; }; reader.readAsText(file); } else { fileNameDisplay.textContent = 'Ningún archivo'; datosCsvTemporales = null; } });
+        crearListaBtn.onclick = () => { if (!datosCsvTemporales) { createModal({ title: 'Atención', bodyHTML: '<p>Por favor, primero seleccione un archivo CSV.</p>', footerButtons: [{ text: 'Aceptar' }] }); return; } const lineas = datosCsvTemporales.trim().split('\n'); lineas.shift(); const estudiantes = lineas.map(linea => { const v = linea.trim().split(';'); return { apellidos: v[0] || '', nombres: v[1] || '', correo: v[2] || '', grupo: v[3] || '', subgrupo: v[4] || '' }; }); if (estudiantes.length === 0 || !estudiantes[0].grupo) { createModal({ title: 'Error de Formato', bodyHTML: '<p>El archivo CSV está vacío o no tiene la columna "Grupo".</p>', footerButtons: [{ text: 'Aceptar' }] }); return; } const nombreCurso = estudiantes[0].grupo; cursosData[nombreCurso] = estudiantes; guardarDatosEnStorage(); createModal({ title: 'Éxito', bodyHTML: `<p>Curso "${nombreCurso}" guardado correctamente.</p>`, footerButtons: [{ text: 'Aceptar' }] }); csvFileInput.value = ''; fileNameDisplay.textContent = 'Ningún archivo'; datosCsvTemporales = null; document.body.classList.add('sidebar-collapsed'); inicializarApp(); };
+        exportarBtn.onclick = () => { if (Object.keys(cursosData).length === 0) { createModal({ title: 'Información', bodyHTML: '<p>No hay datos para exportar.</p>', footerButtons: [{ text: 'Aceptar' }] }); return; } const blob = new Blob([JSON.stringify({cursos: cursosData, evaluaciones: evaluacionesData, ui: uiState, rubricas: rubricDefinitionsData}, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'backup_completo.json'; a.click(); URL.revokeObjectURL(url); };
+        importarBtn.onclick = () => importFileInput.click();
+        
+        importFileInput.onchange = (e) => {
+            if (!e.target.files.length) return;
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    if (data && data.cursos && typeof data.evaluaciones !== 'undefined') {
+                        createModal({
+                            title: 'Confirmar Importación',
+                            bodyHTML: '<p>Esta acción reemplazará todos los datos actuales. ¿Desea continuar?</p>',
+                            footerButtons: [
+                                { text: 'Cancelar', classes: ['secondary'] },
+                                { text: 'Importar', onClick: () => {
+                                    cursosData = data.cursos;
+                                    evaluacionesData = data.evaluaciones;
+                                    if (data.ui) uiState = data.ui;
+                                    if (data.rubricas) rubricDefinitionsData = data.rubricas;
+                                    guardarDatosEnStorage();
+                                    guardarEvaluacionesData();
+                                    guardarUIState();
+                                    guardarRubricDefinitions();
+                                    hideModal();
+                                    location.reload(); 
+                                }}
+                            ]
+                        });
+                    } else {
+                        createModal({ title: 'Error de Importación', bodyHTML: '<p>El archivo JSON no tiene la estructura esperada.</p>', footerButtons: [{ text: 'Cerrar', classes: ['secondary'] }] });
+                    }
+                } catch (error) {
+                    createModal({ title: 'Error de Importación', bodyHTML: `<p>No se pudo procesar el archivo. Verifique que sea un archivo JSON válido.</p>`, footerButtons: [{ text: 'Cerrar', classes: ['secondary'] }] });
+                } finally {
+                    importFileInput.value = '';
+                }
+            };
+            reader.readAsText(file);
+        };
+        
+        borrarBtn.onclick = () => { 
+            const CONFIRM_TEXT = "BORRAR";
+            createModal({
+                title: 'Confirmar Borrado Total',
+                bodyHTML: `
+                    <p>Esta acción es irreversible y eliminará todos los cursos y evaluaciones.</p>
+                    <p>Para confirmar, escriba <strong>${CONFIRM_TEXT}</strong> en el campo de abajo.</p>
+                    <input type="text" id="confirmDeleteInput" autocomplete="off">`,
+                footerButtons: [
+                    { text: 'Cancelar', classes: ['secondary'] },
+                    { text: 'Confirmar Borrado', id: 'btnConfirmDelete', classes: ['danger'], disabled: true, onClick: () => { localStorage.clear(); location.reload(); }}
+                ]
+            });
+            const confirmInput = document.getElementById('confirmDeleteInput');
+            const btnConfirm = document.getElementById('btnConfirmDelete');
+            confirmInput.focus();
+            confirmInput.addEventListener('input', () => { btnConfirm.disabled = confirmInput.value !== CONFIRM_TEXT; });
+            confirmInput.addEventListener('keyup', (e) => { if(e.key === 'Enter' && !btnConfirm.disabled) { btnConfirm.click(); } });
+        };
+
+        seguimientoContent.addEventListener('click', async (e) => {
+            const criterioEl = e.target.closest('.criterio-evaluacion');
+            if (!criterioEl) return;
+            let stateChanged = false;
+
+            const nivelEl = e.target.closest('.nivel');
+            if (nivelEl) {
+                const points = parseFloat(nivelEl.querySelector('.level-points-container').textContent);
+                criterioEl.dataset.basePoints = points;
+                
+                criterioEl.querySelectorAll('.nivel.selected').forEach(n => n.classList.remove('selected'));
+                nivelEl.classList.add('selected');
+                updateCriterionScore(criterioEl);
+                stateChanged = true;
+            }
+
+            const commentBtn = e.target.closest('.btn-comment');
+            if (commentBtn) {
+                const existingData = { comment: criterioEl.dataset.comment || '', deduction: parseFloat(criterioEl.dataset.deduction) || 0 };
+                const rubricId = criterioEl.dataset.rubricId;
+                const criterioTitulo = criterioEl.dataset.criterioTitulo;
+                const selectedLevelEl = criterioEl.querySelector('.nivel.selected');
+                const levelName = selectedLevelEl ? selectedLevelEl.querySelector('.level-title-rotated').textContent.trim() : null;
+                
+                const newData = await showCommentModal(`Comentario para: ${criterioTitulo}`, existingData, rubricId, criterioTitulo, levelName);
+
+                if (newData !== null) { 
+                    criterioEl.dataset.comment = newData.comment;
+                    criterioEl.dataset.deduction = newData.deduction;
+                    actualizarIndicadorComentario(criterioEl);
+                    updateCriterionScore(criterioEl);
+                    stateChanged = true;
+                }
+            }
+            
+            const resetBtn = e.target.closest('.btn-reset');
+            if (resetBtn) {
+                criterioEl.querySelectorAll('.nivel.selected').forEach(n => n.classList.remove('selected'));
+                delete criterioEl.dataset.basePoints;
+                delete criterioEl.dataset.comment;
+                delete criterioEl.dataset.deduction;
+                updateCriterionScore(criterioEl);
+                actualizarIndicadorComentario(criterioEl);
+                stateChanged = true;
+            }
+
+            if(stateChanged) pushState();
+        });
+        
+        seguimientoContent.addEventListener('blur', (e) => {
+            const target = e.target;
+            if (target.matches('.puntos-obtenidos')) {
+                pushState();
+            }
+        }, true);
+        
+        seguimientoContent.addEventListener('input', (e) => {
+            if (e.target.classList.contains('puntos-obtenidos')) {
+                const criterioEl = e.target.closest('.criterio-evaluacion');
+                criterioEl.querySelectorAll('.nivel.selected').forEach(n => n.classList.remove('selected'));
+                delete criterioEl.dataset.basePoints;
+                delete criterioEl.dataset.deduction;
+                actualizarPuntuacionTotal();
+                checkEvaluationCompleteness();
+                updateDeductionDisplay(criterioEl);
+            }
+        });
+        
+        document.querySelector('.bulk-level-selector').addEventListener('change', (e) => {
+            if(e.target.name === 'bulk-level') {
+                const levelIndex = e.target.value;
+                seguimientoContent.querySelectorAll('.criterio-evaluacion').forEach(criterioEl => {
+                    const nivel = criterioEl.querySelector(`.nivel[data-level-index="${levelIndex}"]`);
+                    if(nivel) nivel.click();
+                });
+                pushState(); // Capture the state after the bulk change
+            }
+        });
+
+        btnGuardarEvaluacionHeader.addEventListener('click', saveEvaluation);
+
+        inicializarApp();
+    });
+    </script>
+</body>
+</html>
