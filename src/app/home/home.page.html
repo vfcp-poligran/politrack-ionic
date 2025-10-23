@@ -35,10 +35,13 @@
     <p>Cargando cursos...</p>
   </div>
 
-  <!-- Lista de Cursos (usando el array filtrado) -->
+  <!--
+    Lista de Cursos
+    (Usamos el array 'cursosFiltrados' que se actualiza desde el Observable)
+  -->
   <ion-list *ngIf="!isLoading && cursosFiltrados.length > 0">
     <ion-item-sliding *ngFor="let curso of cursosFiltrados; trackBy: trackCursoById">
-      <!-- Opciones de deslizamiento -->
+      <!-- Opciones de deslizamiento (Editar) -->
       <ion-item-options side="start">
         <ion-item-option color="primary" (click)="presentEditCursoPrompt(curso)">
           <ion-icon slot="icon-only" name="createOutline"></ion-icon>
@@ -46,16 +49,17 @@
         </ion-item-option>
       </ion-item-options>
 
-      <!-- Contenido del Item -->
+      <!-- Contenido del Item (Click para abrir) -->
       <ion-item button [detail]="false" (click)="openCurso(curso.id)" class="curso-item">
         <ion-label>
           <h2>{{ curso.nombre }}</h2>
-          <p>{{ curso.estudiantes?.length || 0 }} estudiantes</p>
-          <p class="curso-id">ID: {{ curso.id }}</p>
+          <p>{{ curso.estudiantes.length || 0 }} estudiantes</p>
+          <!-- <p class="curso-id">ID: {{ curso.id }}</p> --> <!-- Oculto para UI más limpia -->
         </ion-label>
         <ion-icon name="chevronForwardOutline" slot="end" color="medium"></ion-icon>
       </ion-item>
 
+      <!-- Opciones de deslizamiento (Eliminar) -->
       <ion-item-options side="end">
         <ion-item-option color="danger" (click)="confirmDeleteCurso(curso)">
           <ion-icon slot="icon-only" name="trashOutline"></ion-icon>
@@ -65,7 +69,7 @@
     </ion-item-sliding>
   </ion-list>
 
-  <!-- Estado vacío (después de cargar y no hay cursos) -->
+  <!-- Estado vacío (cuando no hay cursos después de cargar) -->
   <div *ngIf="!isLoading && cursosFiltrados.length === 0" class="empty-state">
     <ion-icon name="addOutline" class="empty-icon"></ion-icon>
     <h3>No hay cursos</h3>
@@ -79,3 +83,4 @@
     </ion-fab-button>
   </ion-fab>
 </ion-content>
+

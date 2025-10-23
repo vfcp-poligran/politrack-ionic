@@ -23,7 +23,7 @@ import { ActionSheetButton } from '@ionic/core';
 import { CursoService } from '../../core/services/curso.service';
 import { DatabaseService } from '../../core/services/database.service';
 // Importar todos los modelos necesarios
-import { Curso, Estudiante, Evaluacion, EvaluacionDetalle, Criterio, Nivel, EvaluacionesCurso } from '../../core/models';
+import { Curso, Estudiante, Criterio, Nivel, EvaluacionesCurso, Evaluacion, EvaluacionDetalle } from '../../core/models';
 import { ComentariosModalComponent } from './comentarios-modal.component';
 
 // Interfaces para datos de modales y estado interno
@@ -101,8 +101,7 @@ const RUBRICA_INDIVIDUAL = [
     FormsModule,
     IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
     IonIcon, IonSearchbar, IonSegment, IonSegmentButton,
-    IonLabel, IonSpinner, IonCheckbox,
-    ComentariosModalComponent // Importar el modal
+    IonLabel, IonSpinner, IonCheckbox
   ],
   standalone: true
 })
@@ -455,7 +454,7 @@ export class CursoDetailPage implements OnInit {
         });
         this.evaluacionGrupal.comentariosCriterios = (grupEvalDetalle as any).comentariosCriterios || {};
         this.evaluacionGrupal.ajustesPuntaje = (grupEvalDetalle as any).ajustesPuntaje || {};
-        this.evaluacionGrupal.comentarios = grupEvalDetalle.comentarios || '';
+        this.evaluacionGrupal.comentarios = typeof grupEvalDetalle.comentarios === 'string' ? grupEvalDetalle.comentarios : '';
         this.evaluacionGrupal.fecha = grupEvalDetalle.fecha || new Date().toISOString();
         console.log(`Evaluación grupal cargada para ${subgrupo} - ${entrega}`);
     } else {
@@ -1020,4 +1019,6 @@ export class CursoDetailPage implements OnInit {
   }
 
 }
+
+// Las interfaces Evaluacion y EvaluacionDetalle se importan desde '../../core/models'
 

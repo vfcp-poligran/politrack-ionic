@@ -2,19 +2,14 @@ import { Component, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import {
-  IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
-  IonLabel, IonIcon, IonFab, IonFabButton, IonSpinner, IonRefresher,
-  IonRefresherContent, IonSearchbar, IonItemSliding, IonItemOptions,
-  IonItemOption, IonButton,
-  AlertController, ActionSheetController, ToastController // <-- Importar dependencias de UI
-} from '@ionic/angular/standalone';
+import { IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem, IonLabel, IonIcon, IonFab, IonFabButton, IonSpinner, IonRefresher, IonRefresherContent, IonSearchbar, IonItemSliding, IonItemOptions, IonItemOption, IonButton, AlertController, ActionSheetController, ToastController // <-- Importar dependencias de UI
+, IonButtons } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { addOutline, chevronForwardOutline, trashOutline, createOutline, ellipsisVertical, cloudUploadOutline, cloudDownloadOutline } from 'ionicons/icons';
 import { Observable } from 'rxjs';
 import { Curso, Estudiante } from '../core/models';
 import { CursoService } from '../core/services/curso.service';
-// Importar ImportExportService (aunque aún no esté actualizado)
+// Importar ImportExportService (el que está en el Canvas)
 import { ImportExportService } from '../core/services/import-export.service';
 
 @Component({
@@ -28,14 +23,15 @@ import { ImportExportService } from '../core/services/import-export.service';
     IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
     IonLabel, IonIcon, IonFab, IonFabButton, IonSpinner, IonRefresher,
     IonRefresherContent, IonSearchbar, IonItemSliding, IonItemOptions,
-    IonItemOption, IonButton
-  ],
+    IonItemOption, IonButton,
+    IonButtons
+],
 })
 export class HomePage implements OnInit {
 
-  // Inyectar servicios
+  // Inyectar servicios correctos
   private cursoService = inject(CursoService);
-  private importExportService = inject(ImportExportService);
+  private importExportService = inject(ImportExportService); // <-- Usar este
   private router = inject(Router);
   private alertController = inject(AlertController);
   private actionSheetController = inject(ActionSheetController);
@@ -56,7 +52,7 @@ export class HomePage implements OnInit {
       ellipsisVertical, cloudUploadOutline, cloudDownloadOutline
     });
 
-    // 2. Suscribirse al Observable de cursos
+    // 2. Suscribirse al Observable de cursos (del servicio correcto)
     this.cursos$ = this.cursoService.cursos$;
   }
 
@@ -78,6 +74,7 @@ export class HomePage implements OnInit {
 
   /**
    * Carga o recarga la lista de cursos desde el servicio.
+   * Usa async/await, no .subscribe()
    */
   async loadCursos(enSilencio = false) {
     if (!enSilencio) {
@@ -104,6 +101,7 @@ export class HomePage implements OnInit {
 
   /**
    * Muestra un prompt para agregar un nuevo curso.
+   * (Esta es la lógica de edición en línea que refactorizamos)
    */
   async presentAddCursoPrompt() {
     const alert = await this.alertController.create({
@@ -154,6 +152,7 @@ export class HomePage implements OnInit {
 
   /**
    * Muestra un prompt para editar el nombre de un curso.
+   * (Lógica de edición en línea)
    */
   async presentEditCursoPrompt(curso: Curso) {
     const alert = await this.alertController.create({
@@ -210,11 +209,12 @@ export class HomePage implements OnInit {
 
   /**
    * Llama al servicio para eliminar un curso.
+   * Usa async/await
    */
   private async deleteCurso(cursoId: string) {
     this.isLoading = true;
     try {
-      // 5. Llamar al servicio
+      // 5. Llamar al servicio asíncrono
       await this.cursoService.deleteCurso(cursoId);
       await this.showToast('Curso eliminado correctamente.');
       // La UI se actualiza automáticamente
@@ -228,6 +228,7 @@ export class HomePage implements OnInit {
 
   /**
    * Maneja el evento del Refresher (tirar para actualizar).
+   * Lógica async/await robusta.
    */
   async handleRefresh(event: any) {
     try {
@@ -260,6 +261,7 @@ export class HomePage implements OnInit {
 
   /**
    * Abre el menú de opciones (Importar/Exportar).
+   * (Esta es la lógica de importación/exportación correcta)
    */
   async openMenu() {
     const actionSheet = await this.actionSheetController.create({
@@ -269,14 +271,14 @@ export class HomePage implements OnInit {
           text: 'Importar Datos (JSON)',
           icon: 'cloudUploadOutline',
           handler: () => {
-            this.importarDatos();
+            this.importarDatos(); // <-- Llama al método de abajo
           }
         },
         {
           text: 'Exportar Datos (JSON)',
           icon: 'cloudDownloadOutline',
           handler: () => {
-            this.exportarDatos();
+            this.exportarDatos(); // <-- Llama al método de abajo
           }
         },
         {
@@ -290,32 +292,31 @@ export class HomePage implements OnInit {
   }
 
   /**
-   * Llama al servicio de importación (Placeholder).
+   * Llama al servicio de importación (el del Canvas)
    */
   async importarDatos() {
-    // 6. Lógica de importación (usando importExportService)
     try {
-      // (Esta lógica debe actualizarse en import-export.service.ts)
-      // await this.importExportService.importarDatos();
-      await this.showAlert('Pendiente', 'La función de importar aún no está conectada al nuevo DatabaseService.');
-      await this.loadCursos(); // Recargar por si acaso
+      // 6. Llama al servicio correcto
+      await this.importExportService.importarDatos();
+      // No es necesario un alert de éxito aquí, el servicio ya muestra uno.
+      // Los datos se recargarán automáticamente.
     } catch (error: any) {
-      await this.showAlert('Error de Importación', error.message);
+      // El servicio ya maneja sus propios errores, pero podemos poner un log
+      console.error('Error capturado en HomePage al importar:', error);
+      await this.showAlert('Error de Importación', `Ocurrió un error: ${error.message}`);
     }
   }
 
   /**
-   * Llama al servicio de exportación (Placeholder).
+   * Llama al servicio de exportación (el del Canvas)
    */
   async exportarDatos() {
-    // 7. Lógica de exportación (usando importExportService)
     try {
-       // (Esta lógica debe actualizarse en import-export.service.ts)
-      // const jsonData = await this.importExportService.exportarDatos();
-      // (lógica para guardar/compartir el jsonData)
-      await this.showAlert('Pendiente', 'La función de exportar aún no está conectada al nuevo DatabaseService.');
+      // 7. Llama al servicio correcto
+      await this.importExportService.exportarDatos();
     } catch (error: any) {
-      await this.showAlert('Error de Exportación', error.message);
+      console.error('Error capturado en HomePage al exportar:', error);
+      await this.showAlert('Error de Exportación', `Ocurrió un error: ${error.message}`);
     }
   }
 
@@ -339,4 +340,10 @@ export class HomePage implements OnInit {
     });
     await toast.present();
   }
+
+  // Función de seguimiento para *ngFor
+  trackCursoById(index: number, curso: Curso) {
+    return curso.id;
+  }
 }
+
