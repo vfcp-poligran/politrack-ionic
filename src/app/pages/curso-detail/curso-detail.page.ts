@@ -13,8 +13,9 @@ import {
   arrowBack, filterOutline, downloadOutline, addOutline, searchOutline,
   analyticsOutline, close, checkmarkCircleOutline, warningOutline, alertCircleOutline,
   documentTextOutline, locateOutline, listOutline, gitNetworkOutline, phonePortraitOutline,
-  helpOutline, megaphoneOutline, flag
-} from 'ionicons/icons';
+  helpOutline, megaphoneOutline, flag, createOutline, trashOutline, closeOutline, chatboxOutline, chatbox
+} from 'ionicons/icons'; // Added necessary icons
+import { ActionSheetButton } from '@ionic/core'; // For ActionSheetController types
 
 import { CursoService } from '../../core/services/curso.service';
 import { DatabaseService } from '../../core/services/database.service';
@@ -22,6 +23,50 @@ import { Curso } from '../../core/models/curso.model';
 import { Estudiante } from '../../core/models/estudiante.model';
 import { Evaluacion } from '../../core/models/evaluacion.model';
 import { ComentariosModalComponent } from './comentarios-modal.component';
+
+// Interfaces para datos de modales y eventos
+interface PuntosEditadosData {
+  pg_score?: string | number;
+  pi_score?: string | number;
+}
+
+interface ComentariosModalData {
+    comentarios: string;
+    ajustePuntaje: number;
+    guardarComoComun: boolean;
+}
+
+// --- Definición de Rúbricas (movidas fuera de la clase) ---
+const RUBRICAS_GRUPALES = {
+    'E1': [
+      { codigo: 'documento_inicial', nombre: 'Documento Inicial', peso: '(5)', maxPuntos: 5, niveles: [ { valor: 1, nombre: 'Insuficiente', descripcion: 'Sin formato o incompleto.' }, { valor: 3, nombre: 'Aceptable', descripcion: 'Formato básico adecuado.' }, { valor: 5, nombre: 'Excelente', descripcion: 'Formato profesional y portada completa.' } ] },
+      { codigo: 'planteamiento_objetivos', nombre: 'Planteamiento y Objetivos', peso: '(5)', maxPuntos: 5, niveles: [ { valor: 1, nombre: 'Insuficiente', descripcion: 'Objetivos vagos o incompletos.' }, { valor: 3, nombre: 'Aceptable', descripcion: 'Objetivos claros con algunos detalles.' }, { valor: 5, nombre: 'Excelente', descripcion: 'Objetivos SMART.' } ] },
+      { codigo: 'requerimientos', nombre: 'Requerimientos', peso: '(10)', maxPuntos: 10, niveles: [ { valor: 4, nombre: 'Insuficiente', descripcion: 'Lista incompleta o confusa.' }, { valor: 7, nombre: 'Aceptable', descripcion: 'Identifica la mayoría.' }, { valor: 10, nombre: 'Excelente', descripcion: 'Identifica exhaustivamente todos.' } ] },
+      { codigo: 'flujo_navegacion', nombre: 'Flujo de Navegación', peso: '(30)', maxPuntos: 30, niveles: [ { valor: 9, nombre: 'Insuficiente', descripcion: 'Confuso o incompleto.' }, { valor: 20, nombre: 'Aceptable', descripcion: 'Flujo funcional y comprensible.' }, { valor: 30, nombre: 'Excelente', descripcion: 'Flujo completo, claro y detallado.' } ] },
+      { codigo: 'mockups_wireframes', nombre: 'Mockups y Wireframes', peso: '(25)', maxPuntos: 25, niveles: [ { valor: 7, nombre: 'Insuficiente', descripcion: 'Básicos o de baja calidad.' }, { valor: 17, nombre: 'Aceptable', descripcion: 'Mockups funcionales.' }, { valor: 25, nombre: 'Excelente', descripcion: 'Mockups completos y profesionales.' } ] }
+    ],
+    'E2': [
+      { codigo: 'atencion_ajustes_tutor', nombre: 'Atención de ajustes del tutor', peso: '(5)', maxPuntos: 5, niveles: [ { valor: 1, nombre: 'Insuficiente', descripcion: 'Menos del 70% de comentarios atendidos, ajustes superficiales o incompletos.' }, { valor: 3, nombre: 'Aceptable', descripcion: 'Se atendió el 70-90% de los comentarios con algunos detalles pendientes.' }, { valor: 5, nombre: 'Excelente', descripcion: 'Todos los comentarios se atendieron de manera completa y pertinente.' } ] },
+      { codigo: 'flujo_navegacion_mockups', nombre: 'Flujo de navegación y mockups', peso: '(10)', maxPuntos: 10, niveles: [ { valor: 4, nombre: 'Insuficiente', descripcion: 'Flujo confuso, incompleto o sin lógica clara.' }, { valor: 7, nombre: 'Aceptable', descripcion: 'Flujo comprensible con inconsistencias menores.' }, { valor: 10, nombre: 'Excelente', descripcion: 'Flujo completo, lógico e intuitivo con mockups bien diseñados.' } ] },
+      { codigo: 'requerimientos_actualizados', nombre: 'Requerimientos actualizados', peso: '(10)', maxPuntos: 10, niveles: [ { valor: 4, nombre: 'Insuficiente', descripcion: 'Incompletos, desactualizados o mal redactados.' }, { valor: 7, nombre: 'Aceptable', descripcion: 'Presentes y actualizados, pero con falta de claridad o detalle.' }, { valor: 10, nombre: 'Excelente', descripcion: 'Completos, bien redactados, actualizados y coherentes.' } ] },
+      { codigo: 'implementacion_interfaces', nombre: 'Implementación de interfaces (70%)', peso: '(20)', maxPuntos: 20, niveles: [ { valor: 9, nombre: 'Insuficiente', descripcion: 'Menos del 60% de interfaces, errores significativos.' }, { valor: 15, nombre: 'Aceptable', descripcion: '60-89% de interfaces, errores menores.' }, { valor: 20, nombre: 'Excelente', descripcion: '90-100% de interfaces, navegación correcta.' } ] },
+      { codigo: 'desarrollo_requerimientos', nombre: 'Desarrollo de requerimientos', peso: '(30)', maxPuntos: 30, niveles: [ { valor: 14, nombre: 'Insuficiente', descripcion: 'Menos del 50% implementado, errores significativos.' }, { valor: 23, nombre: 'Aceptable', descripcion: '50-79% implementado, lógica con errores menores.' }, { valor: 30, nombre: 'Excelente', descripcion: '80-100% implementado, lógica correcta y buenas prácticas.' } ] }
+    ],
+    'EF': [
+      { codigo: 'video', nombre: 'Video', peso: '(10)', maxPuntos: 10, niveles: [ { valor: 4, nombre: 'Insuficiente', descripcion: 'El video no es claro, no muestra toda la funcionalidad o tiene mala calidad.' }, { valor: 7, nombre: 'Aceptable', descripcion: 'El video es claro, pero no cubre toda la funcionalidad o tiene detalles de calidad.' }, { valor: 10, nombre: 'Excelente', descripcion: 'Video claro, conciso, que demuestra toda la funcionalidad principal.' } ] },
+      { codigo: 'cumplimiento_requerimientos', nombre: 'Cumplimiento de Requerimientos', peso: '(65)', maxPuntos: 65, niveles: [ { valor: 16, nombre: 'Insuficiente', descripcion: 'Menos del 70% de los requerimientos funcionales implementados.' }, { valor: 41, nombre: 'Aceptable', descripcion: 'Entre el 70% y 90% de los requerimientos funcionales implementados.' }, { valor: 65, nombre: 'Excelente', descripcion: 'Más del 90% de los requerimientos funcionales implementados.' } ] },
+      { codigo: 'calidad_codigo_arquitectura', nombre: 'Calidad del Código y Arquitectura', peso: '(15)', maxPuntos: 15, niveles: [ { valor: 5, nombre: 'Insuficiente', descripcion: 'El código es desorganizado, difícil de leer o no sigue patrones de arquitectura.' }, { valor: 10, nombre: 'Aceptable', descripcion: 'El código es legible y sigue principios básicos de arquitectura, pero tiene áreas de mejora.' }, { valor: 15, nombre: 'Excelente', descripcion: 'Código limpio, bien documentado y sigue patrones de arquitectura MVC/MVVM.' } ] },
+      { codigo: 'arte_final_experiencia_usuario', nombre: 'Arte Final y Experiencia de Usuario', peso: '(10)', maxPuntos: 10, niveles: [ { valor: 4, nombre: 'Insuficiente', descripcion: 'La interfaz es poco atractiva, inconsistente o difícil de usar.' }, { valor: 7, nombre: 'Aceptable', descripcion: 'La interfaz es funcional y consistente, pero visualmente simple.' }, { valor: 10, nombre: 'Excelente', descripcion: 'Interfaz atractiva, consistente y ofrece una excelente experiencia de usuario.' } ] }
+    ]
+};
+
+const RUBRICA_INDIVIDUAL = [
+    { codigo: 'participacion_colaboracion', nombre: 'Participación y Colaboración', peso: '(20)', maxPuntos: 20, niveles: [ { valor: 6, nombre: 'Insuficiente (0-6)', descripcion: 'Participación mínima o nula. No muestra interés ni aporta.' }, { valor: 13, nombre: 'Aceptable (7-13)', descripcion: 'Participa ocasionalmente con aportes limitados.' }, { valor: 20, nombre: 'Excelente (14-20)', descripcion: 'Participación activa y constante. Lidera iniciativas.' } ] },
+    { codigo: 'responsabilidad_cumplimiento', nombre: 'Responsabilidad y Cumplimiento', peso: '(20)', maxPuntos: 20, niveles: [ { valor: 6, nombre: 'Insuficiente (0-6)', descripcion: 'No cumple con responsabilidades asignadas.' }, { valor: 13, nombre: 'Aceptable (7-13)', descripcion: 'Cumple parcialmente, algunas tareas quedan pendientes.' }, { valor: 20, nombre: 'Excelente (14-20)', descripcion: 'Cumple puntualmente con todas las tareas asignadas.' } ] },
+    { codigo: 'comunicacion_presentacion', nombre: 'Comunicación y Presentación', peso: '(20)', maxPuntos: 20, niveles: [ { valor: 6, nombre: 'Insuficiente (0-6)', descripcion: 'Comunicación deficiente o poco clara.' }, { valor: 13, nombre: 'Aceptable (7-13)', descripcion: 'Comunicación básica pero efectiva.' }, { valor: 20, nombre: 'Excelente (14-20)', descripcion: 'Comunicación clara, efectiva y profesional.' } ] },
+    { codigo: 'conocimiento_tecnico', nombre: 'Conocimiento Técnico', peso: '(15)', maxPuntos: 15, niveles: [ { valor: 4, nombre: 'Insuficiente (0-4)', descripcion: 'Conocimiento técnico insuficiente o nulo.' }, { valor: 10, nombre: 'Aceptable (5-10)', descripcion: 'Conocimiento técnico básico pero funcional.' }, { valor: 15, nombre: 'Excelente (11-15)', descripcion: 'Dominio técnico sólido y aplicado eficazmente.' } ] }
+];
+// --- Fin Definición de Rúbricas ---
 
 @Component({
   selector: 'app-curso-detail',
@@ -32,8 +77,10 @@ import { ComentariosModalComponent } from './comentarios-modal.component';
     FormsModule,
     IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
     IonIcon, IonSearchbar, IonSegment, IonSegmentButton,
-    IonLabel, IonSpinner, IonCheckbox
+    IonLabel, IonSpinner, IonCheckbox, // IonCheckbox is used in the template
+    // IonBackButton is not explicitly used in the template, removing if not needed elsewhere
   ],
+  standalone: true // Added standalone flag
 })
 export class CursoDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
@@ -62,246 +109,51 @@ export class CursoDetailPage implements OnInit {
 
   // Entregas
   entregas = ['E1', 'E2', 'EF'];
-  entregaActiva = 'E1';
+  entregaActiva = 'E1'; // Tipo explícito string
 
   // Panel de seguimiento
   showSeguimiento = false;
-  subgrupoActual = 'G1';
-  subgrupoSeleccionado = ''; // Para controlar el subgrupo seleccionado
+  subgrupoActual = 'G1'; // Tipo explícito string
+  subgrupoSeleccionado = ''; // Para controlar el subgrupo seleccionado // Tipo explícito string
   evaluacionGrupalActiva = false; // Para controlar si la rúbrica grupal está activa
   mostrarResumen = false; // Para mostrar el resumen después de guardar evaluación grupal
 
-    // Rúbricas grupales basadas en documentos académicos oficiales
-  private rubricasGrupales = {
-    'E1': [
-      {
-        codigo: 'documento_inicial',
-        nombre: 'Documento Inicial',
-        peso: '(5)',
-        maxPuntos: 5,
-        niveles: [
-          { valor: 1, nombre: 'Insuficiente', descripcion: 'Sin formato o incompleto.' },
-          { valor: 3, nombre: 'Aceptable', descripcion: 'Formato básico adecuado.' },
-          { valor: 5, nombre: 'Excelente', descripcion: 'Formato profesional y portada completa.' }
-        ]
-      },
-      {
-        codigo: 'planteamiento_objetivos',
-        nombre: 'Planteamiento y Objetivos',
-        peso: '(5)',
-        maxPuntos: 5,
-        niveles: [
-          { valor: 1, nombre: 'Insuficiente', descripcion: 'Objetivos vagos o incompletos.' },
-          { valor: 3, nombre: 'Aceptable', descripcion: 'Objetivos claros con algunos detalles.' },
-          { valor: 5, nombre: 'Excelente', descripcion: 'Objetivos SMART.' }
-        ]
-      },
-      {
-        codigo: 'requerimientos',
-        nombre: 'Requerimientos',
-        peso: '(10)',
-        maxPuntos: 10,
-        niveles: [
-          { valor: 4, nombre: 'Insuficiente', descripcion: 'Lista incompleta o confusa.' },
-          { valor: 7, nombre: 'Aceptable', descripcion: 'Identifica la mayoría.' },
-          { valor: 10, nombre: 'Excelente', descripcion: 'Identifica exhaustivamente todos.' }
-        ]
-      },
-      {
-        codigo: 'flujo_navegacion',
-        nombre: 'Flujo de Navegación',
-        peso: '(30)',
-        maxPuntos: 30,
-        niveles: [
-          { valor: 9, nombre: 'Insuficiente', descripcion: 'Confuso o incompleto.' },
-          { valor: 20, nombre: 'Aceptable', descripcion: 'Flujo funcional y comprensible.' },
-          { valor: 30, nombre: 'Excelente', descripcion: 'Flujo completo, claro y detallado.' }
-        ]
-      },
-      {
-        codigo: 'mockups_wireframes',
-        nombre: 'Mockups y Wireframes',
-        peso: '(25)',
-        maxPuntos: 25,
-        niveles: [
-          { valor: 7, nombre: 'Insuficiente', descripcion: 'Básicos o de baja calidad.' },
-          { valor: 17, nombre: 'Aceptable', descripcion: 'Mockups funcionales.' },
-          { valor: 25, nombre: 'Excelente', descripcion: 'Mockups completos y profesionales.' }
-        ]
-      }
-    ],
-    'E2': [
-      {
-        codigo: 'atencion_ajustes_tutor',
-        nombre: 'Atención de ajustes del tutor',
-        peso: '(5)',
-        maxPuntos: 5,
-        niveles: [
-          { valor: 1, nombre: 'Insuficiente', descripcion: 'Menos del 70% de comentarios atendidos, ajustes superficiales o incompletos.' },
-          { valor: 3, nombre: 'Aceptable', descripcion: 'Se atendió el 70-90% de los comentarios con algunos detalles pendientes.' },
-          { valor: 5, nombre: 'Excelente', descripcion: 'Todos los comentarios se atendieron de manera completa y pertinente.' }
-        ]
-      },
-      {
-        codigo: 'flujo_navegacion_mockups',
-        nombre: 'Flujo de navegación y mockups',
-        peso: '(10)',
-        maxPuntos: 10,
-        niveles: [
-          { valor: 4, nombre: 'Insuficiente', descripcion: 'Flujo confuso, incompleto o sin lógica clara.' },
-          { valor: 7, nombre: 'Aceptable', descripcion: 'Flujo comprensible con inconsistencias menores.' },
-          { valor: 10, nombre: 'Excelente', descripcion: 'Flujo completo, lógico e intuitivo con mockups bien diseñados.' }
-        ]
-      },
-      {
-        codigo: 'requerimientos_actualizados',
-        nombre: 'Requerimientos actualizados',
-        peso: '(10)',
-        maxPuntos: 10,
-        niveles: [
-          { valor: 4, nombre: 'Insuficiente', descripcion: 'Incompletos, desactualizados o mal redactados.' },
-          { valor: 7, nombre: 'Aceptable', descripcion: 'Presentes y actualizados, pero con falta de claridad o detalle.' },
-          { valor: 10, nombre: 'Excelente', descripcion: 'Completos, bien redactados, actualizados y coherentes.' }
-        ]
-      },
-      {
-        codigo: 'implementacion_interfaces',
-        nombre: 'Implementación de interfaces (70%)',
-        peso: '(20)',
-        maxPuntos: 20,
-        niveles: [
-          { valor: 9, nombre: 'Insuficiente', descripcion: 'Menos del 60% de interfaces, errores significativos.' },
-          { valor: 15, nombre: 'Aceptable', descripcion: '60-89% de interfaces, errores menores.' },
-          { valor: 20, nombre: 'Excelente', descripcion: '90-100% de interfaces, navegación correcta.' }
-        ]
-      },
-      {
-        codigo: 'desarrollo_requerimientos',
-        nombre: 'Desarrollo de requerimientos',
-        peso: '(30)',
-        maxPuntos: 30,
-        niveles: [
-          { valor: 14, nombre: 'Insuficiente', descripcion: 'Menos del 50% implementado, errores significativos.' },
-          { valor: 23, nombre: 'Aceptable', descripcion: '50-79% implementado, lógica con errores menores.' },
-          { valor: 30, nombre: 'Excelente', descripcion: '80-100% implementado, lógica correcta y buenas prácticas.' }
-        ]
-      }
-    ],
-    'EF': [
-      {
-        codigo: 'video',
-        nombre: 'Video',
-        peso: '(10)',
-        maxPuntos: 10,
-        niveles: [
-          { valor: 4, nombre: 'Insuficiente', descripcion: 'El video no es claro, no muestra toda la funcionalidad o tiene mala calidad.' },
-          { valor: 7, nombre: 'Aceptable', descripcion: 'El video es claro, pero no cubre toda la funcionalidad o tiene detalles de calidad.' },
-          { valor: 10, nombre: 'Excelente', descripcion: 'Video claro, conciso, que demuestra toda la funcionalidad principal.' }
-        ]
-      },
-      {
-        codigo: 'cumplimiento_requerimientos',
-        nombre: 'Cumplimiento de Requerimientos',
-        peso: '(65)',
-        maxPuntos: 65,
-        niveles: [
-          { valor: 16, nombre: 'Insuficiente', descripcion: 'Menos del 70% de los requerimientos funcionales implementados.' },
-          { valor: 41, nombre: 'Aceptable', descripcion: 'Entre el 70% y 90% de los requerimientos funcionales implementados.' },
-          { valor: 65, nombre: 'Excelente', descripcion: 'Más del 90% de los requerimientos funcionales implementados.' }
-        ]
-      },
-      {
-        codigo: 'calidad_codigo_arquitectura',
-        nombre: 'Calidad del Código y Arquitectura',
-        peso: '(15)',
-        maxPuntos: 15,
-        niveles: [
-          { valor: 5, nombre: 'Insuficiente', descripcion: 'El código es desorganizado, difícil de leer o no sigue patrones de arquitectura.' },
-          { valor: 10, nombre: 'Aceptable', descripcion: 'El código es legible y sigue principios básicos de arquitectura, pero tiene áreas de mejora.' },
-          { valor: 15, nombre: 'Excelente', descripcion: 'Código limpio, bien documentado y sigue patrones de arquitectura MVC/MVVM.' }
-        ]
-      },
-      {
-        codigo: 'arte_final_experiencia_usuario',
-        nombre: 'Arte Final y Experiencia de Usuario',
-        peso: '(10)',
-        maxPuntos: 10,
-        niveles: [
-          { valor: 4, nombre: 'Insuficiente', descripcion: 'La interfaz es poco atractiva, inconsistente o difícil de usar.' },
-          { valor: 7, nombre: 'Aceptable', descripcion: 'La interfaz es funcional y consistente, pero visualmente simple.' },
-          { valor: 10, nombre: 'Excelente', descripcion: 'Interfaz atractiva, consistente y ofrece una excelente experiencia de usuario.' }
-        ]
-      }
-    ]
-  };
-
-  // Rúbrica individual (igual para todas las entregas)
-  private rubricaIndividual = [
-    {
-      codigo: 'participacion_colaboracion',
-      nombre: 'Participación y Colaboración',
-      peso: '(20)',
-      maxPuntos: 20,
-      niveles: [
-        { valor: 6, nombre: 'Insuficiente (0-6)', descripcion: 'Participación mínima o nula. No muestra interés ni aporta.' },
-        { valor: 13, nombre: 'Aceptable (7-13)', descripcion: 'Participa ocasionalmente con aportes limitados.' },
-        { valor: 20, nombre: 'Excelente (14-20)', descripcion: 'Participación activa y constante. Lidera iniciativas.' }
-      ]
-    },
-    {
-      codigo: 'responsabilidad_cumplimiento',
-      nombre: 'Responsabilidad y Cumplimiento',
-      peso: '(20)',
-      maxPuntos: 20,
-      niveles: [
-        { valor: 6, nombre: 'Insuficiente (0-6)', descripcion: 'No cumple con responsabilidades asignadas.' },
-        { valor: 13, nombre: 'Aceptable (7-13)', descripcion: 'Cumple parcialmente, algunas tareas quedan pendientes.' },
-        { valor: 20, nombre: 'Excelente (14-20)', descripcion: 'Cumple puntualmente con todas las tareas asignadas.' }
-      ]
-    },
-    {
-      codigo: 'comunicacion_presentacion',
-      nombre: 'Comunicación y Presentación',
-      peso: '(20)',
-      maxPuntos: 20,
-      niveles: [
-        { valor: 6, nombre: 'Insuficiente (0-6)', descripcion: 'Comunicación deficiente o poco clara.' },
-        { valor: 13, nombre: 'Aceptable (7-13)', descripcion: 'Comunicación básica pero efectiva.' },
-        { valor: 20, nombre: 'Excelente (14-20)', descripcion: 'Comunicación clara, efectiva y profesional.' }
-      ]
-    },
-    {
-      codigo: 'conocimiento_tecnico',
-      nombre: 'Conocimiento Técnico',
-      peso: '(15)',
-      maxPuntos: 15,
-      niveles: [
-        { valor: 4, nombre: 'Insuficiente (0-4)', descripcion: 'Conocimiento técnico insuficiente o nulo.' },
-        { valor: 10, nombre: 'Aceptable (5-10)', descripcion: 'Conocimiento técnico básico pero funcional.' },
-        { valor: 15, nombre: 'Excelente (11-15)', descripcion: 'Dominio técnico sólido y aplicado eficazmente.' }
-      ]
-    }
-  ];
-
-  // Estado de evaluación actual
-  evaluacionActual = {
-    estudiante: null as Estudiante | null,
-    entrega: 'E1' as string,
-    criterios: {} as { [criterio: string]: number },
-    comentariosCriterios: {} as { [criterio: string]: string },
-    ajustesPuntaje: {} as { [criterio: string]: number }, // Nuevo: para guardar ajustes de puntaje
+    // Estado de evaluación actual - Added type definitions
+  evaluacionActual: {
+    estudiante: Estudiante | null;
+    entrega: 'E1' | 'E2' | 'EF'; // Use specific types
+    criterios: { [criterioCodigo: string]: number };
+    comentariosCriterios: { [criterioCodigo: string]: string };
+    ajustesPuntaje: { [criterioCodigo: string]: number };
+    comentarios: string;
+    fecha: string; // ISO String date
+    esGrupal: boolean;
+  } = {
+    estudiante: null,
+    entrega: 'E1',
+    criterios: {},
+    comentariosCriterios: {},
+    ajustesPuntaje: {},
     comentarios: '',
     fecha: new Date().toISOString(),
-    esGrupal: false as boolean
+    esGrupal: false
   };
 
-  // Estado de evaluación grupal independiente
-  evaluacionGrupal = {
-    subgrupo: '' as string,
-    entrega: 'E1' as string,
-    criterios: {} as { [criterio: string]: number },
-    comentariosCriterios: {} as { [criterio: string]: string },
-    ajustesPuntaje: {} as { [criterio: string]: number }, // Nuevo: para guardar ajustes de puntaje
+  // Estado de evaluación grupal independiente - Added type definitions
+  evaluacionGrupal: {
+    subgrupo: string;
+    entrega: 'E1' | 'E2' | 'EF'; // Use specific types
+    criterios: { [criterioCodigo: string]: number };
+    comentariosCriterios: { [criterioCodigo: string]: string };
+    ajustesPuntaje: { [criterioCodigo: string]: number };
+    comentarios: string;
+    fecha: string; // ISO String date
+  } = {
+    subgrupo: '',
+    entrega: 'E1',
+    criterios: {},
+    comentariosCriterios: {},
+    ajustesPuntaje: {},
     comentarios: '',
     fecha: new Date().toISOString()
   };
@@ -325,10 +177,9 @@ export class CursoDetailPage implements OnInit {
       arrowBack, filterOutline, downloadOutline, addOutline, searchOutline,
       analyticsOutline, close, checkmarkCircleOutline, warningOutline, alertCircleOutline,
       documentTextOutline, locateOutline, listOutline, gitNetworkOutline, phonePortraitOutline,
-      helpOutline, megaphoneOutline, flag
+      helpOutline, megaphoneOutline, flag, createOutline, trashOutline, closeOutline, chatboxOutline, chatbox // Added missing icons
     });
-
-    // Cargar comentarios comunes guardados
+    // Cargar comentarios comunes
     this.cargarComentariosComunes();
   }
 
@@ -349,6 +200,12 @@ export class CursoDetailPage implements OnInit {
         this.estudiantes = this.curso.estudiantes || [];
         this.extractSubgrupos();
         this.applyFilters();
+         // Cargar evaluaciones después de cargar el curso y estudiantes
+        this.curso.evaluaciones = await this.databaseService.getEvaluacionesCurso(this.cursoId);
+      } else {
+         console.warn(`Curso con ID ${this.cursoId} no encontrado.`);
+         this.estudiantes = [];
+         this.subgrupos = [];
       }
 
       this.isLoading = false;
@@ -369,20 +226,20 @@ export class CursoDetailPage implements OnInit {
         subgruposSet.add(est.subgrupo);
       }
     });
-
-    this.subgrupos = Array.from(subgruposSet).sort();
+    // Convert to array and sort naturally (G1, G2, ..., G10)
+    this.subgrupos = Array.from(subgruposSet).sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, ''), 10);
+        const numB = parseInt(b.replace(/\D/g, ''), 10);
+        return numA - numB;
+    });
   }
 
   /**
    * Obtiene los subgrupos ordenados ascendentemente
    */
   getSubgruposOrdenados(): string[] {
-    return [...this.subgrupos].sort((a, b) => {
-      // Ordenamiento natural para G1, G2, G3, etc.
-      const numA = parseInt(a.replace(/\D/g, '')) || 0;
-      const numB = parseInt(b.replace(/\D/g, '')) || 0;
-      return numA - numB;
-    });
+     // Sorting is now done in extractSubgrupos
+    return this.subgrupos;
   }
 
   /**
@@ -407,20 +264,26 @@ export class CursoDetailPage implements OnInit {
     }
 
     this.estudiantesFiltrados = filtered;
+     // Recalculate selectAll state after filtering
+    this.updateSelectAllState();
   }
 
   /**
    * Maneja cambio en búsqueda
+   * Changed event type from 'any' to 'Event' (more specific)
+   * or use CustomEvent if expecting Ionic event detail
    */
-  onSearchChange(event: any): void {
-    this.searchText = event.detail.value || '';
+  onSearchChange(event: Event): void {
+    const target = event.target as HTMLIonSearchbarElement | null; // More specific type
+    this.searchText = target?.value?.toLowerCase() || '';
     this.applyFilters();
   }
 
   /**
    * Maneja cambio en filtro de subgrupo
+   * Changed event type from 'any' to CustomEvent for Ionic components
    */
-  onSubgrupoChange(event: any): void {
+  onSubgrupoChange(event: CustomEvent): void {
     this.subgrupoFilter = event.detail.value || '';
     this.applyFilters();
   }
@@ -453,9 +316,11 @@ export class CursoDetailPage implements OnInit {
 
   /**
    * Alterna selección de todos los estudiantes
+   * Changed event type from 'any' to CustomEvent for Ionic components
    */
-  toggleSelectAll(event: any): void {
+  toggleSelectAll(event: CustomEvent): void {
     const checked = event.detail.checked;
+    this.selectAll = checked; // Update the state property
 
     if (checked) {
       this.estudiantesFiltrados.forEach(est => {
@@ -483,9 +348,16 @@ export class CursoDetailPage implements OnInit {
    * Actualiza el estado del checkbox "Seleccionar todos"
    */
   private updateSelectAllState(): void {
-    this.selectAll = this.estudiantesFiltrados.length > 0 &&
-      this.estudiantesFiltrados.every(est => this.selectedEstudiantes.has(est.correo));
-  }
+    const numFiltered = this.estudiantesFiltrados.length;
+    const numSelected = this.selectedEstudiantes.size; // Use size for Set
+
+    // Check if all *currently filtered* students are selected
+    if (numFiltered > 0) {
+        this.selectAll = this.estudiantesFiltrados.every(est => this.selectedEstudiantes.has(est.correo));
+    } else {
+        this.selectAll = false; // No students to select
+    }
+}
 
   /**
    * Verifica si un estudiante está seleccionado
@@ -504,11 +376,14 @@ export class CursoDetailPage implements OnInit {
   /**
    * Obtiene la evaluación de un estudiante para una entrega
    */
-  getEvaluacion(correo: string, entrega: string): any {
+  getEvaluacion(correo: string, entrega: string): Evaluacion | null { // Return type Evaluacion | null
     if (!this.curso?.evaluaciones) return null;
 
-    const evaluacionesEntrega = this.curso.evaluaciones[entrega as keyof typeof this.curso.evaluaciones];
-    return evaluacionesEntrega ? evaluacionesEntrega[correo] : null;
+    const entregaKey = entrega as keyof typeof this.curso.evaluaciones;
+    const evaluacionesEntrega = this.curso.evaluaciones[entregaKey];
+
+    // Ensure evaluations for the delivery exist and the student's evaluation exists
+    return (evaluacionesEntrega && evaluacionesEntrega[correo]) ? evaluacionesEntrega[correo] : null;
   }
 
   /**
@@ -528,15 +403,17 @@ export class CursoDetailPage implements OnInit {
       const filename = `${this.curso?.nombre.replace(/\s+/g, '_')}_${Date.now()}.csv`;
 
       // En web, descargar el archivo
-      const blob = new Blob([csv], { type: 'text/csv' });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' }); // Added charset
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = filename;
+      document.body.appendChild(link); // Append link to body to ensure click works in all browsers
       link.click();
+      document.body.removeChild(link); // Clean up link
       window.URL.revokeObjectURL(url);
 
-      await this.showAlert('Éxito', 'Curso exportado correctamente');
+      await this.showToast('Curso exportado correctamente'); // Use showToast
     } catch (error) {
       console.error('Error al exportar:', error);
       await this.showAlert('Error', 'No se pudo exportar el curso');
@@ -559,12 +436,16 @@ export class CursoDetailPage implements OnInit {
 
   /**
    * Maneja el cambio de entrega activa
+   * Changed event type from 'any' to CustomEvent for Ionic components
    */
-  onEntregaChange(event: any): void {
-    this.entregaActiva = event.detail.value;
+  onEntregaChange(event: CustomEvent): void {
+    this.entregaActiva = event.detail.value as 'E1' | 'E2' | 'EF'; // Type assertion
     // Si hay un subgrupo seleccionado, activar rúbrica grupal automáticamente
     if (this.subgrupoSeleccionado && this.subgrupoSeleccionado !== '') {
       this.activarRubricaGrupal(this.subgrupoSeleccionado);
+    } else if (this.evaluacionActual.estudiante) {
+      // If an individual student is selected, reload their evaluation for the new 'entrega'
+      this.iniciarEvaluacion(this.evaluacionActual.estudiante);
     }
   }
 
@@ -577,8 +458,9 @@ export class CursoDetailPage implements OnInit {
     if (subgrupo === '') {
       // Todos los grupos - desactivar evaluación grupal
       this.evaluacionGrupalActiva = false;
-      this.evaluacionActual.estudiante = null;
-      this.evaluacionActual.esGrupal = false;
+      // Do not clear individual evaluation if one is active
+      // this.evaluacionActual.estudiante = null;
+      // this.evaluacionActual.esGrupal = false;
       this.limpiarEvaluacionGrupal();
       this.mostrarResumen = false; // Ocultar resumen al cambiar de grupo
     } else {
@@ -586,7 +468,7 @@ export class CursoDetailPage implements OnInit {
       this.activarRubricaGrupal(subgrupo);
       // Limpiar evaluación individual al activar grupal
       this.evaluacionActual.estudiante = null;
-      this.evaluacionActual.esGrupal = false;
+      this.evaluacionActual.esGrupal = false; // Ensure this is false when activating group eval
       this.mostrarResumen = false; // Ocultar resumen al seleccionar nuevo grupo
     }
 
@@ -647,10 +529,18 @@ export class CursoDetailPage implements OnInit {
       this.mostrarResumen = false;
       // Mantener evaluacionGrupalActiva = true y subgrupoSeleccionado
       this.showToast('Evaluación cancelada');
+    } else if (this.evaluacionActual.estudiante) {
+        // Clear evaluation data but keep the student selected
+        this.evaluacionActual.criterios = {};
+        this.evaluacionActual.comentariosCriterios = {};
+        this.evaluacionActual.ajustesPuntaje = {};
+        this.evaluacionActual.comentarios = '';
+        this.showToast('Evaluación cancelada');
     } else {
-      this.evaluacionActual.estudiante = null;
-      this.evaluacionActual.criterios = {};
-      this.evaluacionActual.comentarios = '';
+        // No evaluation active, perhaps reset panel state if needed
+        this.evaluacionGrupalActiva = false;
+        this.subgrupoSeleccionado = '';
+        this.limpiarEvaluacionGrupal();
     }
   }
 
@@ -674,11 +564,16 @@ export class CursoDetailPage implements OnInit {
       }
 
       // Re-aplicar filtros para refrescar la vista
+      // Note: Re-applying filters might not be enough if the object reference didn't change deep inside curso.evaluaciones
+      // Force Angular change detection if necessary, or ensure immutability
       this.applyFilters();
+
 
       // Limpiar indicadores después de un tiempo
       setTimeout(() => {
         this.puntosActualizados.clear();
+         // Force update again after clearing the visual indicator if necessary
+         this.applyFilters();
       }, 2000);
     }
   }
@@ -695,11 +590,24 @@ export class CursoDetailPage implements OnInit {
    */
   getCriterioIcon(codigo: string): string {
     const iconMap: { [key: string]: string } = {
-      'justificacion': 'document-text-outline',
-      'objetivos': 'locate-outline',
+      'documento_inicial': 'document-text-outline',
+      'planteamiento_objetivos': 'locate-outline',
       'requerimientos': 'list-outline',
-      'flujo': 'git-network-outline',
-      'mockups': 'phone-portrait-outline'
+      'flujo_navegacion': 'git-network-outline',
+      'mockups_wireframes': 'phone-portrait-outline',
+      'atencion_ajustes_tutor': 'build-outline',
+      'flujo_navegacion_mockups': 'git-network-outline',
+      'requerimientos_actualizados': 'refresh-outline',
+      'implementacion_interfaces': 'laptop-outline',
+      'desarrollo_requerimientos': 'code-working-outline',
+      'video': 'videocam-outline',
+      'cumplimiento_requerimientos': 'checkmark-done-outline',
+      'calidad_codigo_arquitectura': 'construct-outline',
+      'arte_final_experiencia_usuario': 'color-palette-outline',
+      'participacion_colaboracion': 'people-outline',
+      'responsabilidad_cumplimiento': 'timer-outline',
+      'comunicacion_presentacion': 'megaphone-outline',
+      'conocimiento_tecnico': 'terminal-outline'
     };
     return iconMap[codigo] || 'help-outline';
   }
@@ -708,60 +616,13 @@ export class CursoDetailPage implements OnInit {
    * Obtiene el color para un criterio
    */
   getCriterioColor(codigo: string): string {
-    const colorMap: { [key: string]: string } = {
-      'justificacion': 'primary',
-      'objetivos': 'secondary',
-      'requerimientos': 'tertiary',
-      'flujo': 'success',
-      'mockups': 'warning'
-    };
-    return colorMap[codigo] || 'medium';
+    // Simple cycling through colors for variety
+    const colors = ['primary', 'secondary', 'tertiary', 'success', 'warning'];
+    const hashCode = codigo.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hashCode % colors.length];
   }
 
-  /**
-   * Selecciona un nivel para un criterio
-   */
-  selectNivel(criterio: string, valor: number): void {
-    if (this.evaluacionGrupalActiva) {
-      // Evaluación grupal
-      if (!this.evaluacionGrupal.subgrupo) {
-        this.showAlert('Error', 'Debe seleccionar un subgrupo para evaluar');
-        return;
-      }
-
-      this.evaluacionGrupal.criterios[criterio] = valor;
-      this.guardarEvaluacionGrupal().then(() => {
-        this.actualizarVistaEvaluaciones();
-        this.showToast(`Puntos grupales actualizados: ${this.evaluacionGrupal.subgrupo} - ${valor} pts`);
-      });
-      console.log(`Evaluando grupo ${this.evaluacionGrupal.subgrupo}: ${criterio} = ${valor} puntos`);
-    } else {
-      // Evaluación individual
-      if (!this.evaluacionActual.estudiante) {
-        this.showAlert('Error', 'Debe seleccionar un estudiante para evaluar');
-        return;
-      }
-
-      this.evaluacionActual.criterios[criterio] = valor;
-      this.guardarEvaluacionActual().then(() => {
-        this.actualizarVistaEvaluaciones();
-        this.showToast(`Puntos individuales actualizados: ${this.evaluacionActual.estudiante?.nombres} - ${valor} pts`);
-      });
-      console.log(`Evaluando ${this.evaluacionActual.estudiante.nombres}: ${criterio} = ${valor} puntos`);
-    }
-  }
-
-  /**
-   * Obtiene el valor seleccionado para un criterio
-   */
-  getCriterioValue(criterio: string): number | null {
-    if (this.evaluacionGrupalActiva) {
-      return this.evaluacionGrupal.criterios[criterio] || null;
-    } else {
-      if (!this.evaluacionActual.estudiante) return null;
-      return this.evaluacionActual.criterios[criterio] || null;
-    }
-  }
+  // --- Refactorización de selectNivel (ya implementada arriba) ---
 
   /**
    * Abre el modal de comentarios para un criterio
@@ -769,17 +630,19 @@ export class CursoDetailPage implements OnInit {
   async abrirComentarios(codigoCriterio: string, nombreCriterio: string): Promise<void> {
     console.log('Abriendo comentarios para:', codigoCriterio, nombreCriterio);
 
-    const comentariosActuales = this.evaluacionGrupalActiva
-      ? this.evaluacionGrupal.comentariosCriterios[codigoCriterio] || ''
-      : this.evaluacionActual.comentariosCriterios[codigoCriterio] || '';
+    const isGrupal = this.evaluacionGrupalActiva;
+    const targetEval = isGrupal ? this.evaluacionGrupal : this.evaluacionActual;
 
-    const puntajeOriginal = this.evaluacionGrupalActiva
-      ? this.evaluacionGrupal.criterios[codigoCriterio] || 0
-      : this.evaluacionActual.criterios[codigoCriterio] || 0;
+    // Check if an evaluation is active
+    if ((!isGrupal && !targetEval.estudiante) || (isGrupal && !targetEval.subgrupo)) {
+        this.showAlert('Error', 'Seleccione un estudiante o active la evaluación grupal primero.');
+        return;
+    }
 
-    const ajusteActual = this.evaluacionGrupalActiva
-      ? this.evaluacionGrupal.ajustesPuntaje[codigoCriterio] || 0
-      : this.evaluacionActual.ajustesPuntaje[codigoCriterio] || 0;
+
+    const comentariosActuales = targetEval.comentariosCriterios[codigoCriterio] || '';
+    const puntajeOriginal = targetEval.criterios[codigoCriterio] ?? 0; // Default to 0 if undefined
+    const ajusteActual = targetEval.ajustesPuntaje[codigoCriterio] || 0;
 
     try {
       const modal = await this.modalController.create({
@@ -796,39 +659,35 @@ export class CursoDetailPage implements OnInit {
       await modal.present();
       console.log('Modal presentado');
 
-      const { data, role } = await modal.onWillDismiss();
+      const { data, role } = await modal.onWillDismiss<ComentariosModalData | null>();
       console.log('Modal cerrado con role:', role, 'data:', data);
 
-      if (role === 'confirm' && data !== null) {
+      if (role === 'confirm' && data) {
         // Guardar como comentario común si se marcó
         if (data.guardarComoComun && data.comentarios.trim()) {
           this.guardarComentarioComun(data.comentarios.trim());
         }
 
-        if (this.evaluacionGrupalActiva) {
-          this.evaluacionGrupal.comentariosCriterios[codigoCriterio] = data.comentarios;
-          if (data.ajustePuntaje !== undefined) {
-            this.evaluacionGrupal.ajustesPuntaje[codigoCriterio] = data.ajustePuntaje;
-            // Aplicar el ajuste al puntaje
-            const puntajeFinal = puntajeOriginal + data.ajustePuntaje;
-            this.evaluacionGrupal.criterios[codigoCriterio] = Math.max(0, puntajeFinal);
-          }
-          await this.guardarEvaluacionGrupal();
-        } else {
-          this.evaluacionActual.comentariosCriterios[codigoCriterio] = data.comentarios;
-          if (data.ajustePuntaje !== undefined) {
-            this.evaluacionActual.ajustesPuntaje[codigoCriterio] = data.ajustePuntaje;
-            // Aplicar el ajuste al puntaje
-            const puntajeFinal = puntajeOriginal + data.ajustePuntaje;
-            this.evaluacionActual.criterios[codigoCriterio] = Math.max(0, puntajeFinal);
-          }
-          await this.guardarEvaluacionActual();
+        targetEval.comentariosCriterios[codigoCriterio] = data.comentarios;
+        if (data.ajustePuntaje !== undefined) {
+           targetEval.ajustesPuntaje[codigoCriterio] = data.ajustePuntaje;
+           // Recalcular y guardar el puntaje final del criterio
+           const puntajeFinal = Math.max(0, puntajeOriginal + data.ajustePuntaje); // Asegura que no sea negativo
+           targetEval.criterios[codigoCriterio] = puntajeFinal;
         }
-        this.showToast('Comentario guardado');
+
+        // Guardar la evaluación completa (grupal o individual)
+        const savePromise = isGrupal
+            ? this.guardarEvaluacionGrupal()
+            : this.guardarEvaluacionActual();
+
+        await savePromise;
+        this.actualizarVistaEvaluaciones(); // Actualiza la tabla principal si es necesario
+        this.showToast('Comentario y ajuste guardados');
       }
     } catch (error) {
-      console.error('Error al abrir modal de comentarios:', error);
-      this.showAlert('Error', 'No se pudo abrir el modal de comentarios');
+      console.error('Error al abrir/procesar modal de comentarios:', error);
+      this.showAlert('Error', 'No se pudo guardar el comentario/ajuste');
     }
   }
 
@@ -837,24 +696,23 @@ export class CursoDetailPage implements OnInit {
    */
   getRangoNivel(criterio: any, indiceNivel: number): string {
     const niveles = criterio.niveles;
-    if (indiceNivel >= niveles.length) return '';
+    if (!niveles || indiceNivel >= niveles.length) return '';
 
     const nivelActual = niveles[indiceNivel];
     const nivelSiguiente = niveles[indiceNivel + 1];
+    const nivelAnterior = niveles[indiceNivel - 1];
 
     if (indiceNivel === 0) {
-      // Primer nivel: desde 0 hasta el valor del siguiente nivel menos 1
-      const max = nivelSiguiente ? nivelSiguiente.valor - 1 : nivelActual.valor;
-      return `(0 - ${max})`;
+      // Primer nivel: desde 0 hasta el valor actual
+      return `(0 - ${nivelActual.valor})`;
     } else if (indiceNivel === niveles.length - 1) {
       // Último nivel: desde el valor anterior + 1 hasta el máximo
-      const min = niveles[indiceNivel - 1].valor + 1;
+       const min = nivelAnterior ? nivelAnterior.valor + 1 : nivelActual.valor;
       return `(${min} - ${criterio.maxPuntos})`;
     } else {
-      // Niveles intermedios: desde valor anterior + 1 hasta valor siguiente - 1
-      const min = niveles[indiceNivel - 1].valor + 1;
-      const max = nivelSiguiente.valor - 1;
-      return `(${min} - ${max})`;
+      // Niveles intermedios: desde valor anterior + 1 hasta valor actual
+      const min = nivelAnterior ? nivelAnterior.valor + 1 : nivelActual.valor;
+      return `(${min} - ${nivelActual.valor})`;
     }
   }
 
@@ -864,8 +722,10 @@ export class CursoDetailPage implements OnInit {
   guardarComentarioComun(comentario: string): void {
     if (comentario && !this.comentariosComunes.includes(comentario)) {
       this.comentariosComunes.push(comentario);
-      // Guardar en localStorage
+      // Guardar en localStorage o DatabaseService
       localStorage.setItem('comentariosComunes', JSON.stringify(this.comentariosComunes));
+      // TODO: Consider using DatabaseService for more robust storage
+      // await this.databaseService.saveComentarioPredefinido('general', comentario);
       this.showToast('Comentario común guardado');
     }
   }
@@ -879,12 +739,18 @@ export class CursoDetailPage implements OnInit {
       try {
         const parsed = JSON.parse(guardados);
         if (Array.isArray(parsed)) {
-          this.comentariosComunes = [...this.comentariosComunes, ...parsed];
+           // Combine default and saved, avoiding duplicates
+           const combined = new Set([...this.comentariosComunes, ...parsed]);
+           this.comentariosComunes = Array.from(combined);
         }
       } catch (e) {
         console.error('Error cargando comentarios comunes:', e);
+         // Reset to default if parsing fails
+        localStorage.removeItem('comentariosComunes');
       }
     }
+    // TODO: Load from DatabaseService if implemented
+    // this.comentariosComunes = await this.databaseService.getComentariosPredefinidos('general');
   }
 
   /**
@@ -892,8 +758,8 @@ export class CursoDetailPage implements OnInit {
    */
   getNivelesRubrica(): any[] {
     const criterios = this.getCriteriosEntregaActiva();
-    if (criterios.length > 0) {
-      return criterios[0].niveles; // Todos los criterios comparten los mismos niveles
+    if (criterios.length > 0 && criterios[0].niveles) {
+      return criterios[0].niveles; // Assuming all criteria share the same levels structure
     }
     return [];
   }
@@ -910,8 +776,9 @@ export class CursoDetailPage implements OnInit {
       this.evaluacionActual.criterios;
 
     criterios.forEach((criterio: any) => {
+      // Use criteria codes for lookup
       const valor = criteriosActivos[criterio.codigo];
-      if (valor !== undefined) {
+      if (typeof valor === 'number') { // Ensure it's a number before adding
         total += valor;
       }
     });
@@ -928,9 +795,9 @@ export class CursoDetailPage implements OnInit {
   }
 
   /**
-   * Verifica si un nivel está seleccionado para todos los criterios
+   * Verifica si un nivel está seleccionado para un criterio específico
    */
-  isNivelSelectedForAll(codigoCriterio: string, valorNivel: number): boolean {
+  isNivelSelectedForCriterio(codigoCriterio: string, valorNivel: number): boolean {
     const criteriosActivos = this.evaluacionGrupalActiva ?
       this.evaluacionGrupal.criterios :
       this.evaluacionActual.criterios;
@@ -938,9 +805,7 @@ export class CursoDetailPage implements OnInit {
     return criteriosActivos[codigoCriterio] === valorNivel;
   }
 
-  /**
-   * Verifica si todos los criterios tienen el mismo nivel seleccionado
-   */
+
   /**
    * Verifica si todos los criterios tienen el nivel en el índice especificado seleccionado
    */
@@ -950,43 +815,19 @@ export class CursoDetailPage implements OnInit {
     }
 
     const criterios = this.getCriteriosEntregaActiva();
+     if (criterios.length === 0) return false; // No criteria, so can't be selected
+
     const criteriosActivos = this.evaluacionGrupalActiva ?
       this.evaluacionGrupal.criterios :
       this.evaluacionActual.criterios;
 
     // Verificar si todos los criterios tienen el nivel en este índice seleccionado
     return criterios.every((criterio: any) => {
-      const valorEsperado = criterio.niveles[indiceNivel]?.valor;
-      return criteriosActivos[criterio.codigo] === valorEsperado;
+      // Ensure the nivel exists at this index for this specific criterio
+      const valorEsperado = criterio.niveles?.[indiceNivel]?.valor;
+      // Check if the expected value exists and matches the active evaluation's value
+      return valorEsperado !== undefined && criteriosActivos[criterio.codigo] === valorEsperado;
     });
-  }
-
-  /**
-   * Selecciona el mismo nivel para todos los criterios de la entrega actual
-   */
-  selectNivelParaTodos(codigoCriterio: string, valorNivel: number): void {
-    if (!this.evaluacionActual.estudiante && !this.evaluacionGrupalActiva) {
-      this.showToast('Seleccione un estudiante o active la evaluación grupal primero');
-      return;
-    }
-
-    const criterios = this.getCriteriosEntregaActiva();
-
-    if (this.evaluacionGrupalActiva) {
-      // Aplicar a todos los criterios en evaluación grupal
-      criterios.forEach((criterio: any) => {
-        this.evaluacionGrupal.criterios[criterio.codigo] = valorNivel;
-      });
-      this.guardarEvaluacionGrupal();
-    } else {
-      // Aplicar a todos los criterios en evaluación individual
-      criterios.forEach((criterio: any) => {
-        this.evaluacionActual.criterios[criterio.codigo] = valorNivel;
-      });
-      this.guardarEvaluacionActual();
-    }
-
-    this.showToast('Nivel aplicado a todos los criterios');
   }
 
   /**
@@ -1001,53 +842,37 @@ export class CursoDetailPage implements OnInit {
 
     const criterios = this.getCriteriosEntregaActiva();
 
-    // Verificar si todos los criterios tienen el nivel en este índice seleccionado
-    const criteriosActivos = this.evaluacionGrupalActiva ?
-      this.evaluacionGrupal.criterios :
-      this.evaluacionActual.criterios;
+    // Determine if all criteria currently have this level selected
+    const todosTienenEsteNivel = this.isTodosCriteriosConNivel(indiceNivel);
 
-    const todosTienenEsteNivel = criterios.every((criterio: any) => {
-      const valorEsperado = criterio.niveles[indiceNivel]?.valor;
-      return criteriosActivos[criterio.codigo] === valorEsperado;
-    });
+    const targetEval = this.evaluacionGrupalActiva ? this.evaluacionGrupal : this.evaluacionActual;
 
-    if (this.evaluacionGrupalActiva) {
-      if (todosTienenEsteNivel) {
+    if (todosTienenEsteNivel) {
         // Deseleccionar: limpiar todos los criterios
         criterios.forEach((criterio: any) => {
-          delete this.evaluacionGrupal.criterios[criterio.codigo];
+            delete targetEval.criterios[criterio.codigo];
         });
         this.showToast('Nivel deseleccionado para todos los criterios');
-      } else {
-        // Seleccionar: aplicar el valor del nivel en este índice para cada criterio
-        criterios.forEach((criterio: any) => {
-          const valorNivel = criterio.niveles[indiceNivel]?.valor;
-          if (valorNivel !== undefined) {
-            this.evaluacionGrupal.criterios[criterio.codigo] = valorNivel;
-          }
-        });
-        this.showToast('Nivel aplicado a todos los criterios');
-      }
-      this.guardarEvaluacionGrupal();
     } else {
-      if (todosTienenEsteNivel) {
-        // Deseleccionar: limpiar todos los criterios
-        criterios.forEach((criterio: any) => {
-          delete this.evaluacionActual.criterios[criterio.codigo];
-        });
-        this.showToast('Nivel deseleccionado para todos los criterios');
-      } else {
         // Seleccionar: aplicar el valor del nivel en este índice para cada criterio
         criterios.forEach((criterio: any) => {
-          const valorNivel = criterio.niveles[indiceNivel]?.valor;
-          if (valorNivel !== undefined) {
-            this.evaluacionActual.criterios[criterio.codigo] = valorNivel;
-          }
+            const valorNivel = criterio.niveles?.[indiceNivel]?.valor;
+            if (valorNivel !== undefined) {
+                targetEval.criterios[criterio.codigo] = valorNivel;
+            }
         });
         this.showToast('Nivel aplicado a todos los criterios');
-      }
-      this.guardarEvaluacionActual();
     }
+
+    // Save the changes
+    const savePromise = this.evaluacionGrupalActiva
+        ? this.guardarEvaluacionGrupal()
+        : this.guardarEvaluacionActual();
+
+    savePromise.catch(error => {
+        console.error("Error saving after bulk level select:", error);
+        this.showAlert('Error', 'No se pudieron guardar los cambios masivos.');
+    });
   }
 
   /**
@@ -1058,6 +883,7 @@ export class CursoDetailPage implements OnInit {
     this.evaluacionGrupalActiva = false;
     this.subgrupoSeleccionado = '';
     this.limpiarEvaluacionGrupal();
+    this.mostrarResumen = false; // Ocultar resumen grupal
 
     // Iniciar evaluación individual
     this.evaluacionActual = {
@@ -1078,178 +904,158 @@ export class CursoDetailPage implements OnInit {
   }
 
   /**
-   * Inicia la evaluación grupal
-   */
-  iniciarEvaluacionGrupal(subgrupo: string): void {
-    const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === subgrupo);
-    if (estudiantesGrupo.length > 0) {
-      // Resetear evaluacionActual
-      this.evaluacionActual = {
-        estudiante: estudiantesGrupo[0], // Primer estudiante como representante
-        entrega: this.entregaActiva,
-        criterios: {},
-        comentariosCriterios: {},
-        ajustesPuntaje: {},
-        comentarios: '',
-        fecha: new Date().toISOString(),
-        esGrupal: true
-      };
-
-      // Resetear evaluacionGrupal antes de cargar
-      this.evaluacionGrupal = {
-        subgrupo: subgrupo,
-        entrega: this.entregaActiva,
-        criterios: {},
-        comentariosCriterios: {},
-        ajustesPuntaje: {},
-        comentarios: '',
-        fecha: new Date().toISOString()
-      };
-
-      // Cargar evaluación grupal existente si existe
-      this.cargarEvaluacionGrupalExistente(subgrupo, this.entregaActiva);
-    }
-  }
-
-  /**
    * Carga una evaluación grupal existente
    */
-  private async cargarEvaluacionGrupalExistente(subgrupo: string, entrega: string): Promise<void> {
+  private async cargarEvaluacionGrupalExistente(subgrupo: string, entrega: 'E1' | 'E2' | 'EF'): Promise<void> {
     try {
-      // Buscar evaluación grupal existente
-      const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === subgrupo);
-      if (estudiantesGrupo.length > 0) {
-        const evaluacionExistente = this.getEvaluacion(estudiantesGrupo[0].correo, entrega);
-        if (evaluacionExistente && evaluacionExistente.grup_eval) {
-          // Cargar criterios existentes en la evaluación grupal
-          const criteriosGuardados = evaluacionExistente.grup_eval.criterios || [];
-          const criteriosActivos = this.getCriteriosEntregaActiva();
+        const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === subgrupo);
+        if (estudiantesGrupo.length === 0 || !this.curso?.evaluaciones) return;
 
-          criteriosGuardados.forEach((criterio: any) => {
-            // Buscar el criterio correspondiente por nombre para obtener su código
-            const criterioConfig = criteriosActivos.find((c: any) => c.nombre === criterio.nombre);
-            if (criterioConfig) {
-              this.evaluacionGrupal.criterios[criterioConfig.codigo] = criterio.points;
+        const entregaKey = entrega as keyof typeof this.curso.evaluaciones;
+        const evaluacionesEntrega = this.curso.evaluaciones[entregaKey];
+
+        // Find the first student with a group evaluation detail saved for this group/entrega
+        let evaluacionRepresentativa: Evaluacion | undefined;
+        for (const estudiante of estudiantesGrupo) {
+            const evalEstudiante = evaluacionesEntrega?.[estudiante.correo];
+            if (evalEstudiante?.grup_eval) {
+                evaluacionRepresentativa = evalEstudiante;
+                break;
             }
-          });
-
-          // Cargar comentarios generales
-          this.evaluacionGrupal.comentarios = evaluacionExistente.grup_eval.comentarios || '';
-
-          // Cargar comentarios por criterio si existen
-          if ((evaluacionExistente.grup_eval as any).comentariosCriterios) {
-            this.evaluacionGrupal.comentariosCriterios = (evaluacionExistente.grup_eval as any).comentariosCriterios;
-          }
-
-          console.log('Evaluación grupal cargada:', this.evaluacionGrupal.criterios);
         }
-      }
-    } catch (error) {
-      console.error('Error cargando evaluación grupal existente:', error);
-    }
-  }
 
-  /**
-   * Carga una evaluación existente
-   */
-  private async cargarEvaluacionExistente(estudiante: Estudiante, entrega: string): Promise<void> {
-    try {
-      const evaluacionExistente = this.getEvaluacion(estudiante.correo, entrega);
-      if (evaluacionExistente && evaluacionExistente.ind_eval) {
-        // Cargar criterios existentes
-        const criteriosGuardados = evaluacionExistente.ind_eval.criterios || [];
-        const criteriosActivos = this.getCriteriosEntregaActiva();
+        if (evaluacionRepresentativa?.grup_eval) {
+            const grupEval = evaluacionRepresentativa.grup_eval;
+            const criteriosGuardados = grupEval.criterios || [];
+            const criteriosActivos = this.getCriteriosEntregaActiva(); // Uses RUBRICAS_GRUPALES
 
-        // Si es un array (formato nuevo)
-        if (Array.isArray(criteriosGuardados)) {
-          criteriosGuardados.forEach((criterio: any) => {
-            // Buscar el criterio correspondiente por nombre para obtener su código
-            const criterioConfig = criteriosActivos.find((c: any) => c.nombre === criterio.nombre);
-            if (criterioConfig) {
-              this.evaluacionActual.criterios[criterioConfig.codigo] = criterio.points;
-            }
-          });
+            criteriosGuardados.forEach((criterioGuardado: any) => {
+                const criterioConfig = criteriosActivos.find((c: any) => c.nombre === criterioGuardado.nombre);
+                if (criterioConfig) {
+                    this.evaluacionGrupal.criterios[criterioConfig.codigo] = criterioGuardado.points;
+                    // Load comments and adjustments if they exist (using modern structure)
+                    this.evaluacionGrupal.comentariosCriterios[criterioConfig.codigo] = (grupEval as any).comentariosCriterios?.[criterioConfig.codigo] || '';
+                    this.evaluacionGrupal.ajustesPuntaje[criterioConfig.codigo] = (grupEval as any).ajustesPuntaje?.[criterioConfig.codigo] || 0;
+                }
+            });
+
+            this.evaluacionGrupal.comentarios = grupEval.comentarios || '';
+            console.log('Evaluación grupal cargada:', this.evaluacionGrupal.criterios);
         } else {
-          // Si es un objeto (formato antiguo)
-          Object.keys(criteriosGuardados).forEach(criterio => {
-            this.evaluacionActual.criterios[criterio] = (criteriosGuardados as any)[criterio];
-          });
+             console.log(`No group evaluation data found for ${subgrupo} in ${entrega}. Initializing.`);
+             // Ensure criteria object is clean if no data found
+             this.evaluacionGrupal.criterios = {};
+             this.evaluacionGrupal.comentariosCriterios = {};
+             this.evaluacionGrupal.ajustesPuntaje = {};
+             this.evaluacionGrupal.comentarios = '';
         }
-
-        // Cargar comentarios generales
-        this.evaluacionActual.comentarios = evaluacionExistente.ind_eval.comentarios || '';
-
-        // Cargar comentarios por criterio si existen
-        if ((evaluacionExistente.ind_eval as any).comentariosCriterios) {
-          this.evaluacionActual.comentariosCriterios = (evaluacionExistente.ind_eval as any).comentariosCriterios;
-        }
-
-        console.log('Evaluación individual cargada:', this.evaluacionActual.criterios);
-      }
     } catch (error) {
-      console.error('Error cargando evaluación existente:', error);
+        console.error('Error cargando evaluación grupal existente:', error);
     }
-  }
+}
+
 
   /**
-   * Guarda la evaluación actual
+   * Carga una evaluación individual existente
+   */
+  private async cargarEvaluacionExistente(estudiante: Estudiante, entrega: 'E1' | 'E2' | 'EF'): Promise<void> {
+    try {
+        const evaluacionExistente = this.getEvaluacion(estudiante.correo, entrega);
+
+        if (evaluacionExistente?.ind_eval) {
+            const indEval = evaluacionExistente.ind_eval;
+            const criteriosGuardados = indEval.criterios || [];
+            const criteriosActivos = this.getCriteriosEntregaActiva(); // Uses RUBRICA_INDIVIDUAL
+
+             // Reset current eval criteria before loading
+            this.evaluacionActual.criterios = {};
+            this.evaluacionActual.comentariosCriterios = {};
+            this.evaluacionActual.ajustesPuntaje = {};
+
+            criteriosGuardados.forEach((criterioGuardado: any) => {
+                const criterioConfig = criteriosActivos.find((c: any) => c.nombre === criterioGuardado.nombre);
+                if (criterioConfig) {
+                    this.evaluacionActual.criterios[criterioConfig.codigo] = criterioGuardado.points;
+                     // Load comments and adjustments if they exist (using modern structure)
+                    this.evaluacionActual.comentariosCriterios[criterioConfig.codigo] = (indEval as any).comentariosCriterios?.[criterioConfig.codigo] || '';
+                    this.evaluacionActual.ajustesPuntaje[criterioConfig.codigo] = (indEval as any).ajustesPuntaje?.[criterioConfig.codigo] || 0;
+                }
+            });
+
+            this.evaluacionActual.comentarios = indEval.comentarios || '';
+            console.log('Evaluación individual cargada:', this.evaluacionActual.criterios);
+        } else {
+             console.log(`No individual evaluation data found for ${estudiante.correo} in ${entrega}. Initializing.`);
+             // Ensure criteria object is clean if no data found
+             this.evaluacionActual.criterios = {};
+             this.evaluacionActual.comentariosCriterios = {};
+             this.evaluacionActual.ajustesPuntaje = {};
+             this.evaluacionActual.comentarios = '';
+        }
+    } catch (error) {
+        console.error('Error cargando evaluación existente:', error);
+    }
+}
+
+  /**
+   * Guarda la evaluación individual actual
    */
   private async guardarEvaluacionActual(): Promise<void> {
     if (!this.evaluacionActual.estudiante || !this.curso) return;
 
     try {
-      // Convertir criterios a formato del modelo
-      const criteriosArray = this.getCriteriosEntregaActiva().map((criterioConfig: any) => {
+      // Convertir criterios a formato del modelo EvaluacionDetalle
+      const criteriosArray: Criterio[] = this.getCriteriosEntregaActiva().map((criterioConfig: any) => {
         const valorSeleccionado = this.evaluacionActual.criterios[criterioConfig.codigo];
         const nivelSeleccionado = criterioConfig.niveles.find((n: any) => n.valor === valorSeleccionado);
 
         return {
           nombre: criterioConfig.nombre,
-          descripcion: criterioConfig.peso,
-          selectedLevel: nivelSeleccionado?.valor || 0,
-          points: valorSeleccionado || 0,
+          descripcion: criterioConfig.peso, // Storing 'peso' in 'descripcion' field based on model
+          selectedLevel: nivelSeleccionado?.valor, // Store selected value
+          points: valorSeleccionado ?? 0, // Ensure points is a number, default 0
           niveles: criterioConfig.niveles.map((nivel: any) => ({
-            nivel: nivel.valor,
+            nivel: nivel.valor, // Use 'valor' as 'nivel' identifier
             descripcion: nivel.descripcion,
-            puntos: nivel.valor
+            puntos: nivel.valor // Use 'valor' also as 'puntos' for simplicity here
           }))
         };
       });
 
       const totalScore = this.calcularTotalEvaluacion();
 
-      const evaluacionCompleta: Evaluacion = {
-        correo: this.evaluacionActual.estudiante.correo,
-        ind_eval: {
-          criterios: criteriosArray,
-          totalScore: totalScore,
-          comentarios: this.evaluacionActual.comentarios,
-          fecha: this.evaluacionActual.fecha,
-          comentariosCriterios: this.evaluacionActual.comentariosCriterios
-        } as any,
-        pi_score: totalScore, // Puntuación individual
-        sumatoria: totalScore
-      };
+      const evaluacionDetalle: EvaluacionDetalle = {
+        criterios: criteriosArray,
+        totalScore: totalScore,
+        comentarios: this.evaluacionActual.comentarios,
+        fecha: this.evaluacionActual.fecha,
+        // Include criteria comments and adjustments in the detailed evaluation object
+        comentariosCriterios: this.evaluacionActual.comentariosCriterios,
+        ajustesPuntaje: this.evaluacionActual.ajustesPuntaje
+      } as any; // Cast to any temporarily if model doesn't match exactly yet
 
-      // Guardar en el curso
+      // Ensure evaluations structure exists
       if (!this.curso.evaluaciones) {
         this.curso.evaluaciones = { E1: {}, E2: {}, EF: {} };
       }
-
-      if (!this.curso.evaluaciones[this.evaluacionActual.entrega as keyof typeof this.curso.evaluaciones]) {
-        this.curso.evaluaciones[this.evaluacionActual.entrega as keyof typeof this.curso.evaluaciones] = {};
+      const entregaKey = this.evaluacionActual.entrega as keyof typeof this.curso.evaluaciones;
+      if (!this.curso.evaluaciones[entregaKey]) {
+        this.curso.evaluaciones[entregaKey] = {};
       }
 
-      const entregaEvals = this.curso.evaluaciones[this.evaluacionActual.entrega as keyof typeof this.curso.evaluaciones];
+      const entregaEvals = this.curso.evaluaciones[entregaKey];
       if (entregaEvals) {
-        // Obtener evaluación existente para preservar puntuación grupal si existe
+        // Get existing evaluation to preserve group score
         const evaluacionExistente = entregaEvals[this.evaluacionActual.estudiante.correo];
 
-        // Actualizar con puntuación grupal existente si la hay
-        if (evaluacionExistente?.pg_score) {
-          evaluacionCompleta.pg_score = evaluacionExistente.pg_score;
-          evaluacionCompleta.sumatoria = totalScore + evaluacionExistente.pg_score;
-        }
+        const evaluacionCompleta: Evaluacion = {
+            correo: this.evaluacionActual.estudiante.correo,
+            pg_score: evaluacionExistente?.pg_score, // Preserve existing group score
+            pi_score: totalScore, // Set the new individual score
+            ind_eval: evaluacionDetalle, // Store the detailed individual evaluation
+            grup_eval: evaluacionExistente?.grup_eval, // Preserve existing group eval details
+            sumatoria: totalScore + (evaluacionExistente?.pg_score ?? 0) // Recalculate sum
+        };
 
         entregaEvals[this.evaluacionActual.estudiante.correo] = evaluacionCompleta;
       }
@@ -1257,10 +1063,11 @@ export class CursoDetailPage implements OnInit {
       // Guardar en la base de datos
       await this.databaseService.saveCurso(this.curso.id, this.curso);
 
-      console.log('Evaluación guardada exitosamente');
+      console.log('Evaluación individual guardada exitosamente');
     } catch (error) {
-      console.error('Error guardando evaluación:', error);
-      this.showAlert('Error', 'No se pudo guardar la evaluación');
+      console.error('Error guardando evaluación individual:', error);
+      this.showAlert('Error', 'No se pudo guardar la evaluación individual');
+      throw error; // Re-throw error for promise chain
     }
   }
 
@@ -1271,16 +1078,16 @@ export class CursoDetailPage implements OnInit {
     if (!this.evaluacionGrupal.subgrupo || !this.curso) return;
 
     try {
-      // Convertir criterios a formato del modelo
-      const criteriosArray = this.getCriteriosEntregaActiva().map((criterioConfig: any) => {
-        const valorSeleccionado = this.evaluacionGrupal.criterios[criterioConfig.codigo];
-        const nivelSeleccionado = criterioConfig.niveles.find((n: any) => n.valor === valorSeleccionado);
+      // Convertir criterios a formato del modelo EvaluacionDetalle
+      const criteriosArray: Criterio[] = this.getCriteriosEntregaActiva().map((criterioConfig: any) => {
+         const valorSeleccionado = this.evaluacionGrupal.criterios[criterioConfig.codigo];
+         const nivelSeleccionado = criterioConfig.niveles.find((n: any) => n.valor === valorSeleccionado);
 
         return {
           nombre: criterioConfig.nombre,
-          descripcion: criterioConfig.peso,
-          selectedLevel: nivelSeleccionado?.valor || 0,
-          points: valorSeleccionado || 0,
+          descripcion: criterioConfig.peso, // Storing 'peso' in 'descripcion'
+          selectedLevel: nivelSeleccionado?.valor,
+          points: valorSeleccionado ?? 0, // Default 0
           niveles: criterioConfig.niveles.map((nivel: any) => ({
             nivel: nivel.valor,
             descripcion: nivel.descripcion,
@@ -1289,39 +1096,43 @@ export class CursoDetailPage implements OnInit {
         };
       });
 
+      const totalScore = this.calcularTotalEvaluacion();
+
+      const evaluacionDetalle: EvaluacionDetalle = {
+        criterios: criteriosArray,
+        totalScore: totalScore,
+        comentarios: this.evaluacionGrupal.comentarios,
+        fecha: this.evaluacionGrupal.fecha,
+         // Include criteria comments and adjustments
+        comentariosCriterios: this.evaluacionGrupal.comentariosCriterios,
+        ajustesPuntaje: this.evaluacionGrupal.ajustesPuntaje
+      } as any; // Cast to any temporarily
+
       // Obtener estudiantes del subgrupo para aplicar la evaluación grupal
       const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === this.evaluacionGrupal.subgrupo);
 
-      // Guardar en el curso para todos los estudiantes del grupo
+      // Ensure evaluations structure exists
       if (!this.curso.evaluaciones) {
         this.curso.evaluaciones = { E1: {}, E2: {}, EF: {} };
       }
-
-      if (!this.curso.evaluaciones[this.evaluacionGrupal.entrega as keyof typeof this.curso.evaluaciones]) {
-        this.curso.evaluaciones[this.evaluacionGrupal.entrega as keyof typeof this.curso.evaluaciones] = {};
+      const entregaKey = this.evaluacionGrupal.entrega as keyof typeof this.curso.evaluaciones;
+      if (!this.curso.evaluaciones[entregaKey]) {
+        this.curso.evaluaciones[entregaKey] = {};
       }
-
-      const entregaEvals = this.curso.evaluaciones[this.evaluacionGrupal.entrega as keyof typeof this.curso.evaluaciones];
-
-      const totalScore = this.calcularTotalEvaluacion();
+      const entregaEvals = this.curso.evaluaciones[entregaKey];
 
       if (entregaEvals) {
         estudiantesGrupo.forEach(estudiante => {
-          // Obtener evaluación existente para preservar puntuación individual si existe
+          // Get existing evaluation to preserve individual score/details
           const evaluacionExistente = entregaEvals[estudiante.correo];
 
           const evaluacionCompleta: Evaluacion = {
             correo: estudiante.correo,
-            grup_eval: {
-              criterios: criteriosArray,
-              totalScore: totalScore,
-              comentarios: this.evaluacionGrupal.comentarios,
-              fecha: this.evaluacionGrupal.fecha,
-              comentariosCriterios: this.evaluacionGrupal.comentariosCriterios
-            } as any,
-            pg_score: totalScore, // Puntuación grupal
-            pi_score: evaluacionExistente?.pi_score, // Preservar puntuación individual si existe
-            sumatoria: (totalScore + (evaluacionExistente?.pi_score || 0))
+            pg_score: totalScore, // Set the new group score
+            pi_score: evaluacionExistente?.pi_score, // Preserve existing individual score
+            ind_eval: evaluacionExistente?.ind_eval, // Preserve existing individual eval details
+            grup_eval: evaluacionDetalle, // Store the detailed group evaluation
+            sumatoria: totalScore + (evaluacionExistente?.pi_score ?? 0) // Recalculate sum
           };
 
           entregaEvals[estudiante.correo] = evaluacionCompleta;
@@ -1338,19 +1149,22 @@ export class CursoDetailPage implements OnInit {
     } catch (error) {
       console.error('Error guardando evaluación grupal:', error);
       this.showAlert('Error', 'No se pudo guardar la evaluación grupal');
+       throw error; // Re-throw error
     }
   }
 
   /**
-   * Actualiza los comentarios de la evaluación
+   * Actualiza los comentarios de la evaluación (general, not per criteria)
    */
   actualizarComentarios(comentarios: string): void {
+      // This method seems intended for general comments, not per-criteria
+      // Currently, the save methods handle criteria comments. Let's adjust this for general comments.
     if (this.evaluacionGrupalActiva) {
       this.evaluacionGrupal.comentarios = comentarios;
-      this.guardarEvaluacionGrupal();
-    } else {
+      this.guardarEvaluacionGrupal(); // Re-save the whole group eval
+    } else if (this.evaluacionActual.estudiante) {
       this.evaluacionActual.comentarios = comentarios;
-      this.guardarEvaluacionActual();
+      this.guardarEvaluacionActual(); // Re-save the individual eval
     }
   }
 
@@ -1368,7 +1182,7 @@ export class CursoDetailPage implements OnInit {
    */
   getTextoRendimiento(): string {
     const porcentaje = this.getPorcentajeCompletitud();
-    if (porcentaje === 0) return '';
+    if (porcentaje === 0 && !this.isAnyCriterioEvaluated()) return 'Sin evaluar'; // Check if any criteria has value
     if (porcentaje < 40) return 'Malo';
     if (porcentaje < 60) return 'Deficiente';
     if (porcentaje < 75) return 'Aceptable';
@@ -1377,11 +1191,21 @@ export class CursoDetailPage implements OnInit {
   }
 
   /**
+   * Helper to check if any criteria has been evaluated
+   */
+  private isAnyCriterioEvaluated(): boolean {
+      const criteriosActivos = this.evaluacionGrupalActiva
+        ? this.evaluacionGrupal.criterios
+        : this.evaluacionActual.criterios;
+      return Object.keys(criteriosActivos).length > 0;
+  }
+
+  /**
    * Obtiene la clase CSS para el badge de progreso según rendimiento
    */
   getClaseRendimiento(): string {
     const porcentaje = this.getPorcentajeCompletitud();
-    if (porcentaje === 0) return '';
+     if (porcentaje === 0 && !this.isAnyCriterioEvaluated()) return 'ninguno'; // Add a default/none class
     if (porcentaje < 40) return 'malo';
     if (porcentaje < 60) return 'deficiente';
     if (porcentaje < 75) return 'aceptable';
@@ -1390,7 +1214,7 @@ export class CursoDetailPage implements OnInit {
   }
 
   /**
-   * Verifica si la evaluación está completa
+   * Verifica si la evaluación está completa (todos los criterios tienen un valor)
    */
   isEvaluacionCompleta(): boolean {
     const criterios = this.getCriteriosEntregaActiva();
@@ -1399,12 +1223,12 @@ export class CursoDetailPage implements OnInit {
       this.evaluacionActual.criterios;
 
     return criterios.every((criterio: any) =>
-      criteriosActivos[criterio.codigo] !== undefined
+      criteriosActivos[criterio.codigo] !== undefined && criteriosActivos[criterio.codigo] !== null
     );
   }
 
   /**
-   * Finaliza la evaluación actual
+   * Finaliza la evaluación actual y la guarda
    */
   async finalizarEvaluacion(): Promise<void> {
     if (!this.isEvaluacionCompleta()) {
@@ -1414,49 +1238,43 @@ export class CursoDetailPage implements OnInit {
 
     try {
       // Guardar evaluación final
-      if (this.evaluacionGrupalActiva) {
-        await this.guardarEvaluacionGrupal();
-      } else {
-        await this.guardarEvaluacionActual();
-      }
+      const isGrupal = this.evaluacionGrupalActiva;
+      const savePromise = isGrupal ? this.guardarEvaluacionGrupal() : this.guardarEvaluacionActual();
+      await savePromise;
+
+      // Actualizar la vista de la tabla principal
+      this.actualizarVistaEvaluaciones();
 
       // Mostrar resumen
       const total = this.calcularTotalEvaluacion();
       const maximo = this.getMaximoPuntaje();
-      const porcentaje = Math.round((total / maximo) * 100);
+      const porcentaje = this.getPorcentajeCompletitud(); // Use existing method
 
-      if (this.evaluacionGrupalActiva) {
-        const subgrupoActual = this.evaluacionGrupal.subgrupo;
+      let message = '';
+      if (isGrupal) {
+        message = `Evaluación grupal de ${this.evaluacionGrupal.subgrupo} finalizada.\n` +
+                  `Puntuación: ${total}/${maximo} puntos (${porcentaje}%)`;
+      } else if (this.evaluacionActual.estudiante) {
+        message = `Evaluación de ${this.evaluacionActual.estudiante.nombres} finalizada.\n` +
+                  `Puntuación: ${total}/${maximo} puntos (${porcentaje}%)`;
+      }
 
-        this.showAlert(
-          'Evaluación completada',
-          `Evaluación grupal de ${subgrupoActual} finalizada.\n` +
-          `Puntuación: ${total}/${maximo} puntos (${porcentaje}%)`
-        );
+      await this.showAlert('Evaluación completada', message);
 
-        // Limpiar solo criterios y comentarios, mantener grupo seleccionado
-        this.evaluacionGrupal.criterios = {};
-        this.evaluacionGrupal.comentariosCriterios = {};
-        this.evaluacionGrupal.ajustesPuntaje = {};
-        this.evaluacionGrupal.comentarios = '';
-        this.evaluacionGrupal.fecha = new Date().toISOString();
-        // Mantener: evaluacionGrupalActiva, subgrupoSeleccionado, evaluacionGrupal.subgrupo
-      } else {
-        const estudianteActual = this.evaluacionActual.estudiante;
-
-        this.showAlert(
-          'Evaluación completada',
-          `Evaluación de ${estudianteActual?.nombres} finalizada.\n` +
-          `Puntuación: ${total}/${maximo} puntos (${porcentaje}%)`
-        );
-
-        // Limpiar solo criterios y comentarios, mantener estudiante seleccionado
-        this.evaluacionActual.criterios = {};
-        this.evaluacionActual.comentariosCriterios = {};
-        this.evaluacionActual.ajustesPuntaje = {};
-        this.evaluacionActual.comentarios = '';
-        this.evaluacionActual.fecha = new Date().toISOString();
-        // Mantener: evaluacionActual.estudiante
+      // Resetear el estado de evaluación activa (limpiar criterios, etc.) pero mantener selección
+      if (isGrupal) {
+          // Do not deactivate group eval automatically, keep it active for the selected group
+          // this.evaluacionGrupalActiva = false; // Keep active
+          // this.subgrupoSeleccionado = ''; // Keep selected
+          // this.limpiarEvaluacionGrupal(); // Don't clear, maybe user wants to review/adjust
+          this.mostrarResumen = true; // Ensure resumen is shown
+      } else if (this.evaluacionActual.estudiante) {
+          // Keep the student selected, maybe clear criteria for next potential eval? Or keep for review?
+          // Decide based on desired UX flow. Let's keep it for review for now.
+          // this.evaluacionActual.criterios = {};
+          // this.evaluacionActual.comentariosCriterios = {};
+          // this.evaluacionActual.ajustesPuntaje = {};
+          // this.evaluacionActual.comentarios = '';
       }
 
     } catch (error) {
@@ -1465,280 +1283,18 @@ export class CursoDetailPage implements OnInit {
     }
   }
 
-  /**
-   * Obtiene los criterios de la entrega activa
-   */
-  getCriteriosEntregaActiva() {
-    // Si hay evaluación grupal activa, mostrar rúbrica grupal
-    if (this.evaluacionGrupalActiva && this.subgrupoSeleccionado && this.subgrupoSeleccionado !== '') {
-      const entrega = this.entregaActiva as 'E1' | 'E2' | 'EF';
-      return this.rubricasGrupales[entrega] || this.rubricasGrupales['E1'];
-    } else {
-      return this.rubricaIndividual;
-    }
-  }
 
   /**
-   * Obtiene estadísticas de un criterio
+   * Obtiene el resumen completo de la rúbrica para la entrega activa (para mostrar en sección resumen)
    */
-  getCriterioStats(codigo: string): any[] {
-    // Obtener criterios específicos por entrega y tipo
-    const criterios = this.getCriteriosEntregaActiva();
-    const criterio = criterios.find((c: any) => c.codigo === codigo);
-
-    if (!criterio) {
-      return [
-        { label: 'N/A', value: '0', color: 'var(--ion-color-medium)' }
-      ];
-    }
-
-    // Generar estadísticas basadas en los niveles del criterio
-    return criterio.niveles.map((nivel: any, index: number) => ({
-      label: `${nivel.nombre.charAt(0)}(${nivel.valor})`,
-      value: Math.floor(Math.random() * 3).toString(), // Datos de ejemplo
-      color: index === 0 ? 'var(--ion-color-danger)' :
-             index === 1 ? 'var(--ion-color-warning)' :
-             'var(--ion-color-success)'
-    }));
-  }
-
-  /**
-   * Obtiene el resumen de criterios
-   */
-  getResumenCriterios(): any[] {
-    return [
-      {
-        criterio: 'Criterio 1 (Justificación)',
-        estadisticas: 'I(0), A(1), E(2) - Nivel Alcanzado: N/A (0 Puntos)'
-      },
-      {
-        criterio: 'Criterio 2 (Objetivos)',
-        estadisticas: 'I(1), A(2), E(3) - Nivel Alcanzado: N/A (0 Puntos)'
-      },
-      {
-        criterio: 'Criterio 3 (Requerimientos)',
-        estadisticas: 'I(4), A(8), E(10) - Nivel Alcanzado: N/A (0 Puntos)'
-      },
-      {
-        criterio: 'Criterio 4 (Flujo de Navegación)',
-        estadisticas: 'I(9), A(20), E(30) - Nivel Alcanzado: N/A (0 Puntos)'
-      }
-    ];
-  }
-
-  /**
-   * Muestra un alert
-   */
-  private async showAlert(header: string, message: string): Promise<void> {
-    const alert = await this.alertController.create({
-      header,
-      message,
-      buttons: ['OK']
-    });
-    await alert.present();
-  }
-
-  /**
-   * Muestra un toast de confirmación
-   */
-  private async showToast(message: string, color: string = 'success'): Promise<void> {
-    const toast = await this.toastController.create({
-      message,
-      duration: 2000,
-      position: 'top',
-      color,
-      buttons: [
-        {
-          icon: 'close',
-          role: 'cancel'
-        }
-      ]
-    });
-    await toast.present();
-  }
-
-  /**
-   * Abre menú contextual para editar o eliminar estudiante
-   */
-  async abrirMenuContexto(estudiante: Estudiante, event: any): Promise<void> {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const alert = await this.alertController.create({
-      header: `${estudiante.nombres} ${estudiante.apellidos}`,
-      subHeader: estudiante.correo,
-      buttons: [
-        {
-          text: 'Editar E1',
-          handler: () => this.abrirEditorPuntos(estudiante, 'E1')
-        },
-        {
-          text: 'Editar E2',
-          handler: () => this.abrirEditorPuntos(estudiante, 'E2')
-        },
-        {
-          text: 'Editar EF',
-          handler: () => this.abrirEditorPuntos(estudiante, 'EF')
-        },
-        {
-          text: 'Eliminar estudiante',
-          role: 'destructive',
-          handler: () => this.confirmarEliminacion(estudiante)
-        },
-        {
-          text: 'Cancelar',
-          role: 'cancel'
-        }
-      ]
-    });
-
-    await alert.present();
-  }
-
-  /**
-   * Abre un editor para modificar puntos de forma inline
-   */
-  async abrirEditorPuntos(estudiante: Estudiante, entrega: 'E1' | 'E2' | 'EF'): Promise<void> {
-    const evaluacion = this.getEvaluacion(estudiante.correo, entrega);
-    const pgScore = evaluacion?.pg_score || '';
-    const piScore = evaluacion?.pi_score || '';
-
-    const alert = await this.alertController.create({
-      header: `Editar ${entrega} - ${estudiante.nombres} ${estudiante.apellidos}`,
-      inputs: [
-        {
-          name: 'pg_score',
-          type: 'number',
-          placeholder: 'PG (Puntos Grupal)',
-          value: pgScore,
-          min: '0',
-          max: '100'
-        },
-        {
-          name: 'pi_score',
-          type: 'number',
-          placeholder: 'PI (Puntos Individual)',
-          value: piScore,
-          min: '0',
-          max: '100'
-        }
-      ],
-      buttons: [
-        {
-          text: 'Cancelar',
-          role: 'cancel'
-        },
-        {
-          text: 'Guardar',
-          handler: async (data) => {
-            await this.guardarPuntosEditados(estudiante, entrega, data);
-          }
-        }
-      ]
-    });
-
-    await alert.present();
-  }
-
-  /**
-   * Guarda los puntos editados
-   */
-  private async guardarPuntosEditados(estudiante: Estudiante, entrega: 'E1' | 'E2' | 'EF', data: any): Promise<void> {
-    try {
-      const pgScore = parseFloat(data.pg_score) || 0;
-      const piScore = parseFloat(data.pi_score) || 0;
-      const sumatoria = pgScore + piScore;
-
-      // Actualizar la evaluación en el servicio
-      const evaluacion: any = {
-        entrega,
-        pg_score: pgScore,
-        pi_score: piScore,
-        sumatoria: sumatoria,
-        comentarios: ''
-      };
-
-      // Guardar en la base de datos
-      if (this.curso) {
-        await this.databaseService.saveEvaluacion(
-          `${this.cursoId}_${estudiante.correo}_${entrega}`,
-          this.cursoId,
-          estudiante.correo,
-          { [entrega]: evaluacion }
-        );
-
-        await this.showToast(`Puntos de ${entrega} guardados correctamente`);
-        await this.loadCurso();
-      }
-    } catch (error) {
-      console.error('Error al guardar puntos:', error);
-      await this.showAlert('Error', 'No se pudieron guardar los puntos');
-    }
-  }
-
-  /**
-   * Confirma la eliminación de un estudiante del curso
-   */
-  private async confirmarEliminacion(estudiante: Estudiante): Promise<void> {
-    const alert = await this.alertController.create({
-      header: 'Confirmar eliminación',
-      message: `¿Está seguro de que desea eliminar a ${estudiante.nombres} ${estudiante.apellidos} de este curso?`,
-      buttons: [
-        {
-          text: 'Cancelar',
-          role: 'cancel'
-        },
-        {
-          text: 'Eliminar',
-          role: 'destructive',
-          handler: async () => {
-            await this.eliminarEstudiante(estudiante);
-          }
-        }
-      ]
-    });
-
-    await alert.present();
-  }
-
-  /**
-   * Elimina un estudiante del curso
-   */
-  private async eliminarEstudiante(estudiante: Estudiante): Promise<void> {
-    try {
-      if (this.curso) {
-        // Eliminar del array local
-        this.estudiantes = this.estudiantes.filter(e => e.correo !== estudiante.correo);
-        this.estudiantesFiltrados = this.estudiantesFiltrados.filter(e => e.correo !== estudiante.correo);
-
-        // Actualizar el curso en la base de datos
-        this.curso.estudiantes = this.estudiantes;
-        await this.databaseService.saveCurso(this.cursoId, this.curso);
-
-        await this.showToast(`${estudiante.nombres} ${estudiante.apellidos} ha sido eliminado del curso`, 'success');
-      }
-    } catch (error) {
-      console.error('Error al eliminar estudiante:', error);
-      await this.showAlert('Error', 'No se pudo eliminar el estudiante');
-    }
-  }
-
-  /**
-   * Obtiene el resumen completo de la rúbrica para la entrega activa
-   */
-  getResumenRubrica(): any[] {
-    if (!this.evaluacionActual.estudiante && !this.evaluacionGrupalActiva) {
+  getResumenRubrica(): any[] { // Considerar crear una interfaz para el retorno
+    if (!this.evaluacionGrupalActiva || !this.mostrarResumen) { // Only show if group eval was saved
       return [];
     }
 
     const criterios = this.getCriteriosEntregaActiva();
-    const criteriosActivos = this.evaluacionGrupalActiva ?
-      this.evaluacionGrupal.criterios :
-      this.evaluacionActual.criterios;
-
-    const comentariosCriterios = this.evaluacionGrupalActiva ?
-      this.evaluacionGrupal.comentariosCriterios :
-      this.evaluacionActual.comentariosCriterios;
+    const criteriosActivos = this.evaluacionGrupal.criterios;
+    const comentariosCriterios = this.evaluacionGrupal.comentariosCriterios;
 
     return criterios.map((criterio: any) => {
       const valorSeleccionado = criteriosActivos[criterio.codigo];
@@ -1746,7 +1302,10 @@ export class CursoDetailPage implements OnInit {
       const comentario = comentariosCriterios[criterio.codigo] || '';
 
       // Construir información de niveles y rangos
-      const nivelesInfo = criterio.niveles.map((nivel: any) => nivel.nombre).join(' | ');
+      const nivelesInfo = criterio.niveles.map((nivel: any, index: number) =>
+          `${nivel.nombre.charAt(0)}:${this.getRangoNivel(criterio, index)}`
+      ).join(', ');
+
 
       return {
         nombre: criterio.nombre,
@@ -1754,7 +1313,7 @@ export class CursoDetailPage implements OnInit {
         nivelesInfo: nivelesInfo,
         nivelSeleccionado: nivelSeleccionado?.nombre || 'No evaluado',
         descripcion: nivelSeleccionado?.descripcion || '',
-        puntos: valorSeleccionado || 0,
+        puntos: valorSeleccionado ?? 0, // Default 0 if undefined
         comentario: comentario,
         tieneComentario: !!comentario
       };
@@ -1769,51 +1328,43 @@ export class CursoDetailPage implements OnInit {
       this.evaluacionGrupal.comentariosCriterios :
       this.evaluacionActual.comentariosCriterios;
 
-    return !!comentarios[codigoCriterio];
+    return !!(comentarios && comentarios[codigoCriterio]?.trim()); // Check if exists and not empty
   }
 
   /**
    * Obtiene el rendimiento de una entrega específica
    */
-  getRendimientoEntrega(entrega: string): string {
-    if (!this.evaluacionActual.estudiante && !this.evaluacionGrupalActiva) {
-      return 'Sin evaluación';
-    }
+  getRendimientoEntrega(entrega: 'E1' | 'E2' | 'EF'): string {
+      const targetSubgrupo = this.evaluacionGrupal.subgrupo;
+      const targetEstudiante = this.evaluacionActual.estudiante;
+      const maximo = entrega === 'EF' ? 100 : 75; // Máximo puntaje base por entrega
 
-    const estudiante = this.evaluacionActual.estudiante;
-    const subgrupo = this.evaluacionGrupal.subgrupo;
+      let evaluacion: Evaluacion | null = null;
 
-    if (this.evaluacionGrupalActiva && subgrupo) {
-      // Obtener evaluación grupal del primer estudiante del grupo
-      const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === subgrupo);
-      if (estudiantesGrupo.length > 0) {
-        const evaluacion = this.getEvaluacion(estudiantesGrupo[0].correo, entrega);
-        if (evaluacion) {
-          const total = evaluacion.sumatoria || 0;
-          const maximo = entrega === 'EF' ? 100 : 75; // EF tiene 100 puntos, E1 y E2 tienen 75
-          const porcentaje = Math.round((total / maximo) * 100);
-          return `${total}/${maximo} pts (${porcentaje}%) - ${this.getTextoRendimientoPorPorcentaje(porcentaje)}`;
-        }
+      if (this.evaluacionGrupalActiva && targetSubgrupo) {
+          // Find representative eval for the group
+          const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === targetSubgrupo);
+          if (estudiantesGrupo.length > 0) {
+              evaluacion = this.getEvaluacion(estudiantesGrupo[0].correo, entrega);
+          }
+      } else if (targetEstudiante) {
+          evaluacion = this.getEvaluacion(targetEstudiante.correo, entrega);
       }
-    } else if (estudiante) {
-      const evaluacion = this.getEvaluacion(estudiante.correo, entrega);
+
       if (evaluacion) {
-        const total = evaluacion.sumatoria || 0;
-        const maximo = entrega === 'EF' ? 100 : 75; // EF tiene 100 puntos, E1 y E2 tienen 75
-        const porcentaje = Math.round((total / maximo) * 100);
-        return `${total}/${maximo} pts (${porcentaje}%) - ${this.getTextoRendimientoPorPorcentaje(porcentaje)}`;
+          const total = evaluacion.sumatoria ?? 0;
+          const porcentaje = maximo > 0 ? Math.round((total / maximo) * 100) : 0;
+          return `${total}/${maximo} pts (${porcentaje}%) - ${this.getTextoRendimientoPorPorcentaje(porcentaje)}`;
       }
-    }
 
-    const maximoDefault = entrega === 'EF' ? 100 : 75;
-    return `0/${maximoDefault} pts (0%) - Sin evaluar`;
+      return `0/${maximo} pts (0%) - Sin evaluar`;
   }
 
   /**
    * Obtiene el texto de rendimiento según un porcentaje dado
    */
   private getTextoRendimientoPorPorcentaje(porcentaje: number): string {
-    if (porcentaje === 0) return 'Sin evaluar';
+    // Re-using the logic from getTextoRendimiento, ensure it handles 0 correctly if needed
     if (porcentaje < 40) return 'Malo';
     if (porcentaje < 60) return 'Deficiente';
     if (porcentaje < 75) return 'Aceptable';
