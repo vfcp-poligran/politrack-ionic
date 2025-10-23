@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 50" style="enable-background:new 0 0 260 50;">
+  <defs>
+    <!-- Sombra para texto -->
+    <filter id="textShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="rgba(0,0,0,0.3)"/>
+    </filter>
+  </defs>
+
+  <!-- Texto POLITÉCNICO -->
+  <text x="5" y="20"
+        font-family="'Arial Black', Arial, sans-serif"
+        font-size="18"
+        font-weight="900"
+        fill="white"
+        filter="url(#textShadow)"
+        letter-spacing="1px">
+    POLITÉCNICO
+  </text>
+
+  <!-- Texto GRANCOLOMBIANO -->
+  <text x="5" y="38"
+        font-family="'Arial Black', Arial, sans-serif"
+        font-size="16"
+        font-weight="700"
+        fill="white"
+        filter="url(#textShadow)"
+        letter-spacing="0.8px">
+    GRANCOLOMBIANO
+  </text>
+
+  <!-- Línea decorativa institucional -->
+  <line x1="5" y1="44" x2="250" y2="44"
+        stroke="white"
+        stroke-width="2"
+        opacity="0.9"/>
+
+  <!-- Detalle decorativo -->
+  <circle cx="252" cy="44" r="2" fill="white" opacity="0.9"/>
+</svg>
