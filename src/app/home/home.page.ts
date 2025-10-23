@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import {
   IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
   IonLabel, IonFab, IonFabButton, IonIcon, IonButtons, IonButton,
-  IonSpinner, AlertController, ActionSheetController
+  IonSpinner, AlertController, ActionSheetController, ActionSheetButton, ToastController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { add, download, settings, trash, createOutline, ellipsisVertical, schoolOutline } from 'ionicons/icons';
@@ -33,6 +33,7 @@ export class HomePage implements OnInit, OnDestroy { // Implementar OnDestroy
   private importExportService = inject(ImportExportService);
   private alertController = inject(AlertController);
   private actionSheetController = inject(ActionSheetController);
+  private toastController = inject(ToastController);
 
   cursos: Curso[] = [];
   isLoading = true;
