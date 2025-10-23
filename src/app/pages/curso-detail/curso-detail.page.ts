@@ -79,8 +79,7 @@ const RUBRICA_INDIVIDUAL = [
     FormsModule,
     IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
     IonIcon, IonSearchbar, IonSegment, IonSegmentButton,
-    IonLabel, IonSpinner, IonCheckbox,
-    ComentariosModalComponent // <--- ESTÁ AÑADIDO EL MODAL AQUÍ
+    IonLabel, IonSpinner, IonCheckbox
   ],
   standalone: true
 })
