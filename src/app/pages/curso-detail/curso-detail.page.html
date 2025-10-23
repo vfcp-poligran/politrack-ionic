@@ -326,10 +326,10 @@
                   <ion-button 
                     fill="clear" 
                     size="small"
-                    [class]="'comentario-btn ' + (tieneComentario(criterio.codigo) ? 'has-comment' : '')"
+                    [class]="'comentario-btn ' + (tieneComentarioCriterio(criterio.codigo) ? 'has-comment' : '')"
                     (click)="abrirComentarios(criterio.codigo, criterio.nombre)"
-                    [title]="tieneComentario(criterio.codigo) ? 'Ver/editar comentario existente' : 'Agregar comentario'">
-                    <ion-icon [name]="tieneComentario(criterio.codigo) ? 'chatbox' : 'chatbox-outline'" slot="icon-only"></ion-icon>
+                    [title]="tieneComentarioCriterio(criterio.codigo) ? 'Ver/editar comentario existente' : 'Agregar comentario'">
+                    <ion-icon [name]="tieneComentarioCriterio(criterio.codigo) ? 'chatbox' : 'chatbox-outline'" slot="icon-only"></ion-icon>
                   </ion-button>
                   <h3>{{ criterio.nombre }}</h3>
                 </div>
