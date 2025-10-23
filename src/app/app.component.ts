@@ -1,39 +1,62 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
-import { DatabaseService } from './core/services/database.service';
-import { StorageService } from './core/services/storage.service';
+import { Component, inject } from '@angular/core';
+import { IonApp, IonRouterOutlet, Platform } from '@ionic/angular/standalone';
+import { HistoryService } from './core/services';
+import { DatabaseService } from './core/services/database.service'; // <-- 1. Importar DatabaseService
+import { Capacitor } from '@capacitor/core';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { StatusBar, Style } from '@capacitor/status-bar';
 
 @Component({
   selector: 'app-root',
   templateUrl: 'app.component.html',
+  styleUrls: ['app.component.scss'],
+  standalone: true,
   imports: [IonApp, IonRouterOutlet],
 })
-export class AppComponent implements OnInit {
-  private databaseService = inject(DatabaseService);
-  private storageService = inject(StorageService);
+export class AppComponent {
 
-  async ngOnInit() {
-    await this.initializeApp();
+  private historyService = inject(HistoryService);
+  private databaseService = inject(DatabaseService); // <-- 2. Inyectar DatabaseService
+  private platform = inject(Platform); // <-- 3. Inyectar Platform
+
+  constructor() {
+    this.historyService.startTracking();
+    this.initializeApp(); // <-- 4. Llamar al inicializador asíncrono
   }
 
   /**
-   * Inicializa la aplicación y los servicios necesarios
+   * Inicializa la aplicación, esperando que la plataforma esté lista
+   * e inicializando la base de datos antes de ocultar el splash screen.
    */
-  private async initializeApp(): Promise<void> {
+  async initializeApp() {
     try {
-      console.log('Iniciando POLITrack...');
+      // Esperar a que la plataforma (nativo o web) esté lista
+      await this.platform.ready();
+      console.log('Platform is ready.');
 
-      // Inicializar Storage
-      await this.storageService.init();
-      console.log('Storage inicializado');
+      // 5. Inicializar la base de datos (SQLite o Ionic Storage)
+      const dbInitialized = await this.databaseService.init();
 
-      // Inicializar Base de Datos
-      await this.databaseService.init();
-      console.log('Base de datos inicializada');
+      if (dbInitialized) {
+        console.log('Database initialized successfully.');
+      } else {
+        console.error('FATAL: Database initialization failed.');
+        // Aquí podrías mostrar un error fatal al usuario
+      }
 
-      console.log('POLITrack iniciado correctamente');
+      // 6. Configuración nativa (solo se ejecuta en móvil)
+      if (Capacitor.isNativePlatform()) {
+        await StatusBar.setStyle({ style: Style.Default });
+        await SplashScreen.hide(); // Ocultar splash solo después de que todo esté listo
+        console.log('Splash screen hidden and Status bar style set.');
+      }
+
     } catch (error) {
-      console.error('Error al inicializar la aplicación:', error);
+      console.error('CRITICAL: Error during app initialization:', error);
+      // Manejar el error de inicialización (ej. mostrar alerta)
+      if (Capacitor.isNativePlatform()) {
+         await SplashScreen.hide(); // Ocultar splash incluso si hay error para no bloquear
+      }
     }
   }
 }

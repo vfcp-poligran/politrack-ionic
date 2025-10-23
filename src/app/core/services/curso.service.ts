@@ -1,168 +1,125 @@
 import { Injectable, inject } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { DatabaseService } from './database.service';
-import { Curso } from '../models';
+import { BehaviorSubject } from 'rxjs';
+import { Curso, Estudiante } from '../models';
+// El StorageService ya no es necesario, usamos DatabaseService
+// import { StorageService } from './storage.service';
+import { DatabaseService } from './database.service'; // <-- 1. Importar DatabaseService
 
-/**
- * Servicio de gestión de cursos
- */
 @Injectable({
   providedIn: 'root'
 })
 export class CursoService {
-  private db = inject(DatabaseService);
-  
-  private cursosSubject = new BehaviorSubject<{ [key: string]: Curso }>({});
-  public cursos$ = this.cursosSubject.asObservable();
+  // 2. Inyectar DatabaseService
+  private databaseService = inject(DatabaseService);
 
-  private cursoActivoSubject = new BehaviorSubject<string | null>(null);
-  public cursoActivo$ = this.cursoActivoSubject.asObservable();
+  // 3. El BehaviorSubject se vuelve opcional.
+  //    Lo mantendremos por ahora para notificar a la home page,
+  //    pero la "fuente de la verdad" es la base de datos.
+  private cursosSubject = new BehaviorSubject<Curso[]>([]);
+  cursos$ = this.cursosSubject.asObservable();
+
+  constructor() {
+    // Cargar cursos al iniciar el servicio (después de que init() de DB se haya llamado en app.component)
+    this.loadCursos();
+  }
 
   /**
-   * Carga todos los cursos desde la base de datos
+   * Carga todos los cursos desde DatabaseService y actualiza el Observable.
    */
   async loadCursos(): Promise<void> {
-    const cursos = await this.db.getCursos();
-    this.cursosSubject.next(cursos);
+    try {
+      const cursosObj = await this.databaseService.getCursos();
+      // Convertir el objeto { id: curso } en un array [curso]
+      const cursosArray = Object.values(cursosObj);
+      this.cursosSubject.next(cursosArray);
+    } catch (error) {
+      console.error('Error al cargar cursos en CursoService:', error);
+      this.cursosSubject.next([]); // Enviar array vacío en caso de error
+    }
   }
 
   /**
-   * Obtiene un curso específico
+   * Obtiene todos los cursos como un array.
+   * Llama a loadCursos para asegurar que los datos están frescos.
    */
-  async getCurso(cursoId: string): Promise<Curso | null> {
-    return await this.db.getCurso(cursoId);
+  async getCursos(): Promise<Curso[]> {
+    await this.loadCursos(); // Recargar desde la DB
+    return this.cursosSubject.getValue(); // Devolver el valor actual
   }
 
   /**
-   * Crea un nuevo curso
+   * Agrega un nuevo curso a la base de datos.
    */
-  async createCurso(curso: Curso): Promise<void> {
-    await this.db.saveCurso(curso.id, curso);
-    await this.loadCursos();
+  async addCurso(nombre: string, estudiantes: Estudiante[]): Promise<Curso> {
+    try {
+      // Generar un ID único (ej. timestamp)
+      const cursoId = `curso_${Date.now()}`;
+      const nuevoCurso: Curso = {
+        id: cursoId,
+        nombre: nombre,
+        estudiantes: estudiantes,
+        evaluaciones: { E1: {}, E2: {}, EF: {} }, // Objeto de evaluaciones vacío
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 4. Llamar a databaseService.saveCurso
+      await this.databaseService.saveCurso(cursoId, nuevoCurso);
+
+      // 5. Recargar la lista de cursos
+      await this.loadCursos();
+      return nuevoCurso;
+    } catch (error) {
+      console.error('Error al agregar curso:', error);
+      throw new Error('No se pudo agregar el curso.');
+    }
   }
 
   /**
-   * Actualiza un curso existente
+   * Obtiene un solo curso desde la base de datos.
+   * Nota: Este método no carga evaluaciones, eso lo hace curso-detail.
    */
-  async updateCurso(cursoId: string, cursoData: Partial<Curso>): Promise<void> {
-    await this.db.saveCurso(cursoId, cursoData);
-    await this.loadCursos();
+  async getCurso(id: string): Promise<Curso | null> {
+    try {
+      // 6. Llamar a databaseService.getCurso
+      return await this.databaseService.getCurso(id);
+    } catch (error) {
+      console.error(`Error al obtener curso ${id}:`, error);
+      return null;
+    }
   }
 
   /**
-   * Elimina un curso
+   * Actualiza los datos de un curso (ej. la lista de estudiantes).
+   */
+  async updateCurso(cursoId: string, data: Partial<Curso>): Promise<void> {
+    try {
+      // 7. Llamar a databaseService.saveCurso (funciona como 'upsert')
+      //    Aseguramos que 'updatedAt' se actualice si el trigger de DB falla
+      data.updatedAt = new Date().toISOString();
+      await this.databaseService.saveCurso(cursoId, data);
+
+      // 8. Recargar la lista de cursos
+      await this.loadCursos();
+    } catch (error) {
+      console.error(`Error al actualizar curso ${cursoId}:`, error);
+      throw new Error('No se pudo actualizar el curso.');
+    }
+  }
+
+  /**
+   * Elimina un curso de la base de datos.
    */
   async deleteCurso(cursoId: string): Promise<void> {
-    await this.db.deleteCurso(cursoId);
-    await this.loadCursos();
+    try {
+      // 9. Llamar a databaseService.deleteCurso
+      await this.databaseService.deleteCurso(cursoId);
 
-    // Si el curso eliminado era el activo, limpiar
-    if (this.cursoActivoSubject.value === cursoId) {
-      this.cursoActivoSubject.next(null);
+      // 10. Recargar la lista de cursos
+      await this.loadCursos();
+    } catch (error) {
+      console.error(`Error al eliminar curso ${cursoId}:`, error);
+      throw new Error('No se pudo eliminar el curso.');
     }
-  }
-
-  /**
-   * Establece el curso activo
-   */
-  setCursoActivo(cursoId: string | null): void {
-    this.cursoActivoSubject.next(cursoId);
-  }
-
-  /**
-   * Crea un curso desde un archivo CSV
-   */
-  async createCursoFromCSV(csvData: string, nombreCurso: string): Promise<string> {
-    const estudiantes = this.parseCSV(csvData);
-
-    const curso: Curso = {
-      id: this.generateCursoId(nombreCurso),
-      nombre: nombreCurso,
-      estudiantes: estudiantes,
-      evaluaciones: {
-        E1: {},
-        E2: {},
-        EF: {}
-      },
-      createdAt: new Date().toISOString()
-    };
-
-    await this.createCurso(curso);
-    return curso.id;
-  }
-
-  /**
-   * Parsea un archivo CSV y retorna los estudiantes
-   */
-  private parseCSV(csvData: string): any[] {
-    const lines = csvData.trim().split('\n');
-    const estudiantes: any[] = [];
-
-    // Saltar la primera línea (encabezado)
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      const parts = line.split(';');
-      if (parts.length >= 5) {
-        estudiantes.push({
-          apellidos: parts[0].trim(),
-          nombres: parts[1].trim(),
-          correo: parts[2].trim(),
-          grupo: parts[3].trim(),
-          subgrupo: parts[4].trim()
-        });
-      }
-    }
-
-    return estudiantes;
-  }
-
-  /**
-   * Genera un ID único para el curso
-   */
-  private generateCursoId(nombreCurso: string): string {
-    const timestamp = Date.now();
-    const sanitized = nombreCurso.toLowerCase().replace(/\s+/g, '-');
-    return `${sanitized}-${timestamp}`;
-  }
-
-  /**
-   * Exporta un curso a formato CSV
-   */
-  async exportCursoToCSV(cursoId: string): Promise<string> {
-    const curso = await this.getCurso(cursoId);
-    if (!curso) {
-      throw new Error('Curso no encontrado');
-    }
-
-    let csv = 'Apellidos;Nombres;Correo;Grupo;Subgrupo;E1-PG;E1-PI;E1-Σ;E2-PG;E2-PI;E2-Σ;EF-PG;EF-PI;EF-Σ\n';
-
-    curso.estudiantes.forEach(est => {
-      const e1 = curso.evaluaciones?.E1?.[est.correo];
-      const e2 = curso.evaluaciones?.E2?.[est.correo];
-      const ef = curso.evaluaciones?.EF?.[est.correo];
-
-      csv += `${est.apellidos};${est.nombres};${est.correo};${est.grupo};${est.subgrupo}`;
-      csv += `;${e1?.pg_score || ''};${e1?.pi_score || ''};${e1?.sumatoria || ''}`;
-      csv += `;${e2?.pg_score || ''};${e2?.pi_score || ''};${e2?.sumatoria || ''}`;
-      csv += `;${ef?.pg_score || ''};${ef?.pi_score || ''};${ef?.sumatoria || ''}\n`;
-    });
-
-    return csv;
-  }
-
-  /**
-   * Obtiene el observable de cursos
-   */
-  getCursosObservable(): Observable<{ [key: string]: Curso }> {
-    return this.cursos$;
-  }
-
-  /**
-   * Obtiene el valor actual de cursos
-   */
-  getCursosValue(): { [key: string]: Curso } {
-    return this.cursosSubject.value;
   }
 }

@@ -1,340 +1,327 @@
-import { Component, OnInit, OnDestroy, inject } from '@angular/core'; // Importar OnDestroy
+import { Component, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
-  IonLabel, IonFab, IonFabButton, IonIcon, IonButtons, IonButton,
-  IonSpinner, AlertController, ActionSheetController, ActionSheetButton, ToastController
+  IonLabel, IonIcon, IonFab, IonFabButton, IonSpinner, IonRefresher,
+  IonRefresherContent, IonSearchbar, IonItemSliding, IonItemOptions,
+  IonItemOption, IonButton,
+  AlertController, ActionSheetController, ToastController // <-- Importar dependencias de UI
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { add, download, settings, trash, createOutline, ellipsisVertical, schoolOutline } from 'ionicons/icons';
-import { Subject } from 'rxjs'; // Importar Subject
-import { takeUntil } from 'rxjs/operators'; // Importar takeUntil
-
+import { addOutline, chevronForwardOutline, trashOutline, createOutline, ellipsisVertical, cloudUploadOutline, cloudDownloadOutline } from 'ionicons/icons';
+import { Observable } from 'rxjs';
+import { Curso, Estudiante } from '../core/models';
 import { CursoService } from '../core/services/curso.service';
+// Importar ImportExportService (aunque aún no esté actualizado)
 import { ImportExportService } from '../core/services/import-export.service';
-import { Curso } from '../core/models';
 
 @Component({
   selector: 'app-home',
   templateUrl: 'home.page.html',
   styleUrls: ['home.page.scss'],
+  standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
-    IonLabel, IonFab, IonFabButton, IonIcon, IonButtons, IonButton,
-    IonSpinner
+    IonLabel, IonIcon, IonFab, IonFabButton, IonSpinner, IonRefresher,
+    IonRefresherContent, IonSearchbar, IonItemSliding, IonItemOptions,
+    IonItemOption, IonButton
   ],
-  standalone: true // Added standalone flag
 })
-export class HomePage implements OnInit, OnDestroy { // Implementar OnDestroy
-  private router = inject(Router);
+export class HomePage implements OnInit {
+
+  // Inyectar servicios
   private cursoService = inject(CursoService);
   private importExportService = inject(ImportExportService);
+  private router = inject(Router);
   private alertController = inject(AlertController);
   private actionSheetController = inject(ActionSheetController);
   private toastController = inject(ToastController);
 
-  cursos: Curso[] = [];
-  isLoading = true;
+  // Usar el Observable del servicio para reactividad automática
+  public cursos$: Observable<Curso[]>;
+  public isLoading = false;
 
-  private destroy$ = new Subject<void>(); // Subject para gestionar desuscripción
+  // Para el filtro/búsqueda
+  public cursosFiltrados: Curso[] = [];
+  private cursosOriginales: Curso[] = []; // Almacén local para filtrar
 
   constructor() {
-    addIcons({ add, download, settings, trash, createOutline, ellipsisVertical, schoolOutline });
+    // 1. Añadir iconos
+    addIcons({
+      addOutline, chevronForwardOutline, trashOutline, createOutline,
+      ellipsisVertical, cloudUploadOutline, cloudDownloadOutline
+    });
+
+    // 2. Suscribirse al Observable de cursos
+    this.cursos$ = this.cursoService.cursos$;
   }
 
-  async ngOnInit() {
-    await this.loadCursos();
+  ngOnInit() {
+    // Suscribirse a los cambios para mantener la lista de filtrado
+    this.cursos$.subscribe(cursos => {
+      this.cursosOriginales = cursos;
+      this.cursosFiltrados = cursos; // Inicializar lista filtrada
+    });
   }
 
+  /**
+   * Cargar cursos cada vez que la vista esté a punto de entrar.
+   * Esto asegura que los datos estén frescos si volvemos del detalle.
+   */
   async ionViewWillEnter() {
-     // Recargar cursos cada vez que la vista entra para reflejar cambios
-     // (como eliminaciones hechas en otra página)
-    await this.loadCursos();
-  }
-
-  ngOnDestroy() {
-    this.destroy$.next(); // Emitir señal
-    this.destroy$.complete(); // Completar el Subject
-    console.log('HomePage destroyed, subscription cleaned up.'); // Log cleanup
+    await this.loadCursos(true); // Cargar en silencio la primera vez
   }
 
   /**
-   * Carga la lista de cursos
+   * Carga o recarga la lista de cursos desde el servicio.
    */
-  async loadCursos(): Promise<void> {
-    this.isLoading = true;
-    // Cancel any previous subscription before starting a new one in case ionViewWillEnter calls this multiple times
-    this.destroy$.next();
-
+  async loadCursos(enSilencio = false) {
+    if (!enSilencio) {
+      this.isLoading = true;
+    }
     try {
-      await this.cursoService.loadCursos(); // Carga inicial o recarga desde DB/Storage
-      this.cursoService.cursos$
-        .pipe(takeUntil(this.destroy$)) // Desuscribirse cuando destroy$ emita o se llame de nuevo
-        .subscribe(cursosObj => {
-          this.cursos = Object.values(cursosObj);
-          // Only set isLoading to false once data is processed
-          this.isLoading = false;
-          console.log('Cursos loaded/updated:', this.cursos.length);
-        });
+      // 3. Llamar al método asíncrono del servicio
+      await this.cursoService.loadCursos();
+      // La suscripción en ngOnInit actualizará cursosOriginales y cursosFiltrados
     } catch (error) {
-      console.error('Error al cargar cursos:', error);
-      this.isLoading = false; // Asegurarse de quitar el loading en caso de error
+      console.error('Error al cargar cursos en HomePage:', error);
       await this.showAlert('Error', 'No se pudieron cargar los cursos.');
+    } finally {
+      this.isLoading = false;
     }
   }
 
   /**
-   * Selecciona un curso y navega a su detalle
+   * Abre un curso específico.
    */
-  selectCurso(curso: Curso): void {
-    if (!curso || !curso.id) {
-        console.error("Attempted to select an invalid curso:", curso);
-        this.showAlert('Error', 'No se pudo seleccionar el curso.');
-        return;
-    }
-    this.cursoService.setCursoActivo(curso.id);
-    this.router.navigate(['/curso-detail', curso.id]);
+  openCurso(cursoId: string) {
+    this.router.navigate(['/curso', cursoId]);
   }
 
   /**
-   * Muestra el diálogo para importar un curso desde CSV
+   * Muestra un prompt para agregar un nuevo curso.
    */
-  async importarCSV(): Promise<void> {
-    console.log('importarCSV() llamado');
-
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv, text/csv'; // Be more specific with accept attribute
-
-    input.onchange = async (event: any) => {
-      console.log('Archivo seleccionado, procesando...');
-      const file = event.target.files?.[0]; // Use optional chaining
-
-      if (file) {
-        console.log('Archivo encontrado:', file.name, 'Tamaño:', file.size);
-        this.isLoading = true; // Show loading indicator during processing
-
-        try {
-          console.log('Leyendo contenido del archivo...');
-          const csvData = await this.importExportService.readFileFromInput(file);
-          console.log('Archivo leído, validando...');
-
-          const validation = this.importExportService.validateCSV(csvData);
-          console.log('Resultado validación:', validation);
-
-          if (!validation.valid) {
-            await this.showAlert('Error', validation.error || 'CSV inválido');
-            this.isLoading = false; // Hide loading on error
-            return;
-          }
-
-          console.log('CSV válido, solicitando nombre del curso...');
-          // Hide loading indicator before showing the prompt
-          this.isLoading = false;
-          await this.promptNombreCurso(csvData);
-        } catch (error: any) { // Catch specific error type if possible
-          console.error('Error al importar CSV:', error);
-          await this.showAlert('Error', `No se pudo importar el archivo: ${error?.message || error}`);
-          this.isLoading = false; // Hide loading on error
-        }
-      } else {
-        console.log('No se seleccionó ningún archivo');
-        // Optionally, hide loading indicator if it was shown previously
-        // this.isLoading = false;
-      }
-    };
-
-    console.log('Abriendo selector de archivos...');
-    input.click();
-  }
-
-  /**
-   * Solicita el nombre del curso
-   */
-  private async promptNombreCurso(csvData: string): Promise<void> {
+  async presentAddCursoPrompt() {
     const alert = await this.alertController.create({
       header: 'Nuevo Curso',
-      message: 'Ingrese el nombre del curso',
       inputs: [
         {
           name: 'nombre',
           type: 'text',
-          placeholder: 'Nombre del curso'
+          placeholder: 'Nombre del curso (ej. App Móvil G1)'
         }
       ],
       buttons: [
-        {
-          text: 'Cancelar',
-          role: 'cancel'
-        },
+        { text: 'Cancelar', role: 'cancel' },
         {
           text: 'Crear',
-          handler: async (data: { nombre?: string }) => { // Type the data
-            const nombreTrimmed = data.nombre?.trim();
-            if (nombreTrimmed) {
-              this.isLoading = true; // Show loading while creating
-              await this.crearCursoDesdeCSV(csvData, nombreTrimmed);
-              this.isLoading = false; // Hide loading after creation attempt
-              return true; // Allow alert to dismiss
+          handler: async (data) => {
+            if (data.nombre && data.nombre.trim().length > 0) {
+              await this.addCurso(data.nombre.trim());
             } else {
-                 // Prevent closing if name is empty and show toast/message
-                 await this.showToast('El nombre del curso no puede estar vacío.', 'danger');
-                 return false; // Prevents alert from dismissing
+              await this.showToast('Debe ingresar un nombre.', 'warning');
+              return false; // Evita que se cierre el alert
             }
-          }
-        }
-      ],
-      backdropDismiss: false // Prevent dismissing by clicking outside
-    });
-
-    await alert.present();
-  }
-
-  /**
-   * Crea un curso desde datos CSV
-   */
-  private async crearCursoDesdeCSV(csvData: string, nombreCurso: string): Promise<void> {
-    try {
-      console.log('Creando curso:', nombreCurso);
-      // console.log('Datos CSV (primeras 500 chars):', csvData.substring(0, 500)); // Log might be too large
-
-      const cursoId = await this.cursoService.createCursoFromCSV(csvData, nombreCurso);
-      console.log('Curso creado con ID:', cursoId);
-
-      await this.showAlert('Éxito', `Curso "${nombreCurso}" creado exitosamente`);
-      // loadCursos is handled by ionViewWillEnter or the subscription already active
-      // await this.loadCursos(); // Avoid calling loadCursos here if ionViewWillEnter does it
-    } catch (error: any) {
-      console.error('Error al crear curso:', error);
-      console.error('Stack trace:', error.stack);
-      await this.showAlert('Error', `No se pudo crear el curso: ${error.message || error}`);
-    } finally {
-        // Ensure isLoading is false even if creation fails but wasn't caught above
-        this.isLoading = false;
-    }
-  }
-
-  /**
-   * Muestra opciones para un curso
-   */
-  async mostrarOpcionesCurso(curso: Curso, event: Event): Promise<void> {
-    event.stopPropagation(); // Prevent row click
-
-    const actionSheet = await this.actionSheetController.create({
-      header: curso.nombre,
-      buttons: [
-        {
-          text: 'Abrir',
-          icon: 'create-outline', // Use a more appropriate icon like 'open-outline' or 'eye-outline'?
-          handler: () => {
-            this.selectCurso(curso);
-          }
-        },
-        {
-          text: 'Exportar CSV',
-          icon: 'download-outline', // Consistent icon name
-          handler: async () => {
-            await this.exportarCurso(curso);
-          }
-        },
-        {
-          text: 'Eliminar',
-          icon: 'trash-outline', // Consistent icon name
-          role: 'destructive',
-          handler: async () => {
-            await this.confirmarEliminarCurso(curso);
-          }
-        },
-        {
-          text: 'Cancelar',
-          icon: 'close-outline', // Consistent icon name
-          role: 'cancel'
-        }
-      ] as ActionSheetButton[] // Type assertion
-    });
-
-    await actionSheet.present();
-  }
-
-  /**
-   * Exporta un curso a CSV
-   */
-  private async exportarCurso(curso: Curso): Promise<void> {
-    try {
-      this.isLoading = true; // Show loading
-      const csv = await this.cursoService.exportCursoToCSV(curso.id);
-      const filename = `${curso.nombre.replace(/[\s/\\?%*:|"<>]/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`; // Sanitize filename and add date
-      await this.importExportService.exportToCSV(csv, filename);
-       // Show toast instead of alert for success
-      await this.showToast('Curso exportado correctamente', 'success');
-    } catch (error: any) {
-      console.error('Error al exportar curso:', error);
-      await this.showAlert('Error', `No se pudo exportar el curso: ${error?.message || error}`);
-    } finally {
-        this.isLoading = false; // Hide loading
-    }
-  }
-
-  /**
-   * Confirma la eliminación de un curso
-   */
-  private async confirmarEliminarCurso(curso: Curso): Promise<void> {
-    const alert = await this.alertController.create({
-      header: 'Confirmar eliminación',
-      message: `¿Está seguro de eliminar el curso "<strong>${curso.nombre}</strong>"? Esta acción no se puede deshacer.`, // Use strong tag
-      buttons: [
-        {
-          text: 'Cancelar',
-          role: 'cancel'
-        },
-        {
-          text: 'Eliminar',
-          role: 'destructive', // Use role for styling
-          cssClass: 'alert-button-danger', // Optional: Custom class for more styling
-          handler: async () => {
-            this.isLoading = true; // Show loading during deletion
-            await this.eliminarCurso(curso);
-            this.isLoading = false; // Hide loading after deletion attempt
+            return true;
           }
         }
       ]
     });
-
     await alert.present();
   }
 
   /**
-   * Elimina un curso
+   * Llama al servicio para agregar un nuevo curso.
    */
-  private async eliminarCurso(curso: Curso): Promise<void> {
+  private async addCurso(nombre: string) {
+    this.isLoading = true;
     try {
-      await this.cursoService.deleteCurso(curso.id);
-      await this.showToast('Curso eliminado correctamente', 'success');
-      // No need to call loadCursos if the subscription handles updates,
-      // or if ionViewWillEnter handles reload. Check CursoService behavior.
-      // If cursoService.deleteCurso updates the BehaviorSubject, the view updates automatically.
-    } catch (error: any) {
-      console.error('Error al eliminar curso:', error);
-      await this.showAlert('Error', `No se pudo eliminar el curso: ${error?.message || error}`);
+      // 4. Llamar al servicio (asumiendo que inicia sin estudiantes)
+      const nuevoCurso = await this.cursoService.addCurso(nombre, []);
+      await this.showToast(`Curso "${nuevoCurso.nombre}" creado.`);
+      // La UI se actualiza automáticamente gracias al Observable
+    } catch (error) {
+      console.error('Error al crear curso:', error);
+      await this.showAlert('Error', 'No se pudo crear el curso.');
     } finally {
-        // Ensure isLoading is false even if deletion fails but wasn't caught above
-        this.isLoading = false;
+      this.isLoading = false;
     }
   }
 
   /**
-   * Navega a la página de configuración
+   * Muestra un prompt para editar el nombre de un curso.
    */
-  goToSettings(): void {
-    this.router.navigate(['/settings']); // Assuming '/settings' is the correct route
+  async presentEditCursoPrompt(curso: Curso) {
+    const alert = await this.alertController.create({
+      header: 'Editar Curso',
+      inputs: [
+        {
+          name: 'nombre',
+          type: 'text',
+          value: curso.nombre, // Cargar nombre actual
+          placeholder: 'Nombre del curso'
+        }
+      ],
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Guardar',
+          handler: async (data) => {
+            if (data.nombre && data.nombre.trim().length > 0) {
+              curso.nombre = data.nombre.trim();
+              await this.cursoService.updateCurso(curso.id, { nombre: curso.nombre });
+              await this.showToast('Curso actualizado.');
+            } else {
+              await this.showToast('Debe ingresar un nombre.', 'warning');
+              return false; // Evita que se cierre el alert
+            }
+            return true;
+          }
+        }
+      ]
+    });
+    await alert.present();
   }
 
   /**
-   * Muestra un alert con un mensaje
+   * Muestra un prompt de confirmación para eliminar un curso.
    */
-  private async showAlert(header: string, message: string): Promise<void> {
+  async confirmDeleteCurso(curso: Curso) {
+    const alert = await this.alertController.create({
+      header: 'Confirmar Eliminación',
+      message: `¿Está seguro de eliminar el curso "${curso.nombre}"? Se borrarán todas sus evaluaciones. Esta acción es irreversible.`,
+      buttons: [
+        { text: 'Cancelar', role: 'cancel' },
+        {
+          text: 'Eliminar',
+          role: 'destructive',
+          handler: async () => {
+            await this.deleteCurso(curso.id);
+          }
+        }
+      ]
+    });
+    await alert.present();
+  }
+
+  /**
+   * Llama al servicio para eliminar un curso.
+   */
+  private async deleteCurso(cursoId: string) {
+    this.isLoading = true;
+    try {
+      // 5. Llamar al servicio
+      await this.cursoService.deleteCurso(cursoId);
+      await this.showToast('Curso eliminado correctamente.');
+      // La UI se actualiza automáticamente
+    } catch (error) {
+      console.error('Error al eliminar curso:', error);
+      await this.showAlert('Error', 'No se pudo eliminar el curso.');
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
+  /**
+   * Maneja el evento del Refresher (tirar para actualizar).
+   */
+  async handleRefresh(event: any) {
+    try {
+      await this.cursoService.loadCursos();
+    } catch (error) {
+      console.error('Error en refresh:', error);
+      await this.showAlert('Error', 'No se pudieron recargar los cursos.');
+    } finally {
+      // Completar la animación del refresher
+      if (event && event.target) {
+        event.target.complete();
+      }
+    }
+  }
+
+  /**
+   * Filtra la lista de cursos según el texto de búsqueda.
+   */
+  handleSearch(event: Event) {
+    const searchTerm = (event.target as HTMLIonSearchbarElement).value?.toLowerCase() || '';
+    if (!searchTerm) {
+      this.cursosFiltrados = this.cursosOriginales;
+      return;
+    }
+
+    this.cursosFiltrados = this.cursosOriginales.filter(curso =>
+      curso.nombre.toLowerCase().includes(searchTerm)
+    );
+  }
+
+  /**
+   * Abre el menú de opciones (Importar/Exportar).
+   */
+  async openMenu() {
+    const actionSheet = await this.actionSheetController.create({
+      header: 'Opciones',
+      buttons: [
+        {
+          text: 'Importar Datos (JSON)',
+          icon: 'cloudUploadOutline',
+          handler: () => {
+            this.importarDatos();
+          }
+        },
+        {
+          text: 'Exportar Datos (JSON)',
+          icon: 'cloudDownloadOutline',
+          handler: () => {
+            this.exportarDatos();
+          }
+        },
+        {
+          text: 'Cancelar',
+          icon: 'close',
+          role: 'cancel'
+        }
+      ]
+    });
+    await actionSheet.present();
+  }
+
+  /**
+   * Llama al servicio de importación (Placeholder).
+   */
+  async importarDatos() {
+    // 6. Lógica de importación (usando importExportService)
+    try {
+      // (Esta lógica debe actualizarse en import-export.service.ts)
+      // await this.importExportService.importarDatos();
+      await this.showAlert('Pendiente', 'La función de importar aún no está conectada al nuevo DatabaseService.');
+      await this.loadCursos(); // Recargar por si acaso
+    } catch (error: any) {
+      await this.showAlert('Error de Importación', error.message);
+    }
+  }
+
+  /**
+   * Llama al servicio de exportación (Placeholder).
+   */
+  async exportarDatos() {
+    // 7. Lógica de exportación (usando importExportService)
+    try {
+       // (Esta lógica debe actualizarse en import-export.service.ts)
+      // const jsonData = await this.importExportService.exportarDatos();
+      // (lógica para guardar/compartir el jsonData)
+      await this.showAlert('Pendiente', 'La función de exportar aún no está conectada al nuevo DatabaseService.');
+    } catch (error: any) {
+      await this.showAlert('Error de Exportación', error.message);
+    }
+  }
+
+  // --- Helpers de UI ---
+
+  private async showAlert(header: string, message: string) {
     const alert = await this.alertController.create({
       header,
       message,
@@ -343,24 +330,13 @@ export class HomePage implements OnInit, OnDestroy { // Implementar OnDestroy
     await alert.present();
   }
 
-   /**
-   * Muestra un toast de confirmación/error
-   */
-  private async showToast(message: string, color: string = 'success'): Promise<void> {
+  private async showToast(message: string, color: string = 'success', duration = 2000) {
     const toast = await this.toastController.create({
       message,
-      duration: 2500, // Slightly longer duration
-      position: 'top',
+      duration,
       color: color,
-      buttons: [
-        {
-          icon: 'close',
-          role: 'cancel'
-        }
-      ]
+      position: 'bottom'
     });
     await toast.present();
   }
-
-} // Fin de la clase HomePage
-
+}
