@@ -1,13 +1,15 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject } from '@angular/core'; // Importar OnDestroy
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { 
-  IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem, 
+import {
+  IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
   IonLabel, IonFab, IonFabButton, IonIcon, IonButtons, IonButton,
   IonSpinner, AlertController, ActionSheetController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { add, download, settings, trash, createOutline, ellipsisVertical, schoolOutline } from 'ionicons/icons';
+import { Subject } from 'rxjs'; // Importar Subject
+import { takeUntil } from 'rxjs/operators'; // Importar takeUntil
 
 import { CursoService } from '../core/services/curso.service';
 import { ImportExportService } from '../core/services/import-export.service';
@@ -23,8 +25,9 @@ import { Curso } from '../core/models';
     IonLabel, IonFab, IonFabButton, IonIcon, IonButtons, IonButton,
     IonSpinner
   ],
+  standalone: true // Added standalone flag
 })
-export class HomePage implements OnInit {
+export class HomePage implements OnInit, OnDestroy { // Implementar OnDestroy
   private router = inject(Router);
   private cursoService = inject(CursoService);
   private importExportService = inject(ImportExportService);
@@ -33,6 +36,8 @@ export class HomePage implements OnInit {
 
   cursos: Curso[] = [];
   isLoading = true;
+
+  private destroy$ = new Subject<void>(); // Subject para gestionar desuscripción
 
   constructor() {
     addIcons({ add, download, settings, trash, createOutline, ellipsisVertical, schoolOutline });
@@ -43,7 +48,15 @@ export class HomePage implements OnInit {
   }
 
   async ionViewWillEnter() {
+     // Recargar cursos cada vez que la vista entra para reflejar cambios
+     // (como eliminaciones hechas en otra página)
     await this.loadCursos();
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next(); // Emitir señal
+    this.destroy$.complete(); // Completar el Subject
+    console.log('HomePage destroyed, subscription cleaned up.'); // Log cleanup
   }
 
   /**
@@ -51,15 +64,23 @@ export class HomePage implements OnInit {
    */
   async loadCursos(): Promise<void> {
     this.isLoading = true;
+    // Cancel any previous subscription before starting a new one in case ionViewWillEnter calls this multiple times
+    this.destroy$.next();
+
     try {
-      await this.cursoService.loadCursos();
-      this.cursoService.cursos$.subscribe(cursosObj => {
-        this.cursos = Object.values(cursosObj);
-        this.isLoading = false;
-      });
+      await this.cursoService.loadCursos(); // Carga inicial o recarga desde DB/Storage
+      this.cursoService.cursos$
+        .pipe(takeUntil(this.destroy$)) // Desuscribirse cuando destroy$ emita o se llame de nuevo
+        .subscribe(cursosObj => {
+          this.cursos = Object.values(cursosObj);
+          // Only set isLoading to false once data is processed
+          this.isLoading = false;
+          console.log('Cursos loaded/updated:', this.cursos.length);
+        });
     } catch (error) {
       console.error('Error al cargar cursos:', error);
-      this.isLoading = false;
+      this.isLoading = false; // Asegurarse de quitar el loading en caso de error
+      await this.showAlert('Error', 'No se pudieron cargar los cursos.');
     }
   }
 
@@ -67,6 +88,11 @@ export class HomePage implements OnInit {
    * Selecciona un curso y navega a su detalle
    */
   selectCurso(curso: Curso): void {
+    if (!curso || !curso.id) {
+        console.error("Attempted to select an invalid curso:", curso);
+        this.showAlert('Error', 'No se pudo seleccionar el curso.');
+        return;
+    }
     this.cursoService.setCursoActivo(curso.id);
     this.router.navigate(['/curso-detail', curso.id]);
   }
@@ -76,39 +102,46 @@ export class HomePage implements OnInit {
    */
   async importarCSV(): Promise<void> {
     console.log('importarCSV() llamado');
-    
+
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.csv';
+    input.accept = '.csv, text/csv'; // Be more specific with accept attribute
 
     input.onchange = async (event: any) => {
       console.log('Archivo seleccionado, procesando...');
-      const file = event.target.files[0];
-      
+      const file = event.target.files?.[0]; // Use optional chaining
+
       if (file) {
         console.log('Archivo encontrado:', file.name, 'Tamaño:', file.size);
-        
+        this.isLoading = true; // Show loading indicator during processing
+
         try {
           console.log('Leyendo contenido del archivo...');
           const csvData = await this.importExportService.readFileFromInput(file);
           console.log('Archivo leído, validando...');
-          
+
           const validation = this.importExportService.validateCSV(csvData);
           console.log('Resultado validación:', validation);
 
           if (!validation.valid) {
             await this.showAlert('Error', validation.error || 'CSV inválido');
+            this.isLoading = false; // Hide loading on error
             return;
           }
 
           console.log('CSV válido, solicitando nombre del curso...');
+          // Hide loading indicator before showing the prompt
+          this.isLoading = false;
           await this.promptNombreCurso(csvData);
-        } catch (error) {
+        } catch (error: any) { // Catch specific error type if possible
           console.error('Error al importar CSV:', error);
-          await this.showAlert('Error', `No se pudo importar el archivo: ${error}`);
+          await this.showAlert('Error', `No se pudo importar el archivo: ${error?.message || error}`);
+          this.isLoading = false; // Hide loading on error
         }
       } else {
         console.log('No se seleccionó ningún archivo');
+        // Optionally, hide loading indicator if it was shown previously
+        // this.isLoading = false;
       }
     };
 
@@ -137,13 +170,21 @@ export class HomePage implements OnInit {
         },
         {
           text: 'Crear',
-          handler: async (data) => {
-            if (data.nombre && data.nombre.trim()) {
-              await this.crearCursoDesdeCSV(csvData, data.nombre.trim());
+          handler: async (data: { nombre?: string }) => { // Type the data
+            const nombreTrimmed = data.nombre?.trim();
+            if (nombreTrimmed) {
+              this.isLoading = true; // Show loading while creating
+              await this.crearCursoDesdeCSV(csvData, nombreTrimmed);
+              this.isLoading = false; // Hide loading after creation attempt
+            } else {
+                 // Prevent closing if name is empty and show toast/message
+                 await this.showToast('El nombre del curso no puede estar vacío.', 'danger');
+                 return false; // Prevents alert from dismissing
             }
           }
         }
-      ]
+      ],
+      backdropDismiss: false // Prevent dismissing by clicking outside
     });
 
     await alert.present();
@@ -155,17 +196,21 @@ export class HomePage implements OnInit {
   private async crearCursoDesdeCSV(csvData: string, nombreCurso: string): Promise<void> {
     try {
       console.log('Creando curso:', nombreCurso);
-      console.log('Datos CSV (primeras 500 chars):', csvData.substring(0, 500));
-      
+      // console.log('Datos CSV (primeras 500 chars):', csvData.substring(0, 500)); // Log might be too large
+
       const cursoId = await this.cursoService.createCursoFromCSV(csvData, nombreCurso);
       console.log('Curso creado con ID:', cursoId);
-      
+
       await this.showAlert('Éxito', `Curso "${nombreCurso}" creado exitosamente`);
-      await this.loadCursos();
+      // loadCursos is handled by ionViewWillEnter or the subscription already active
+      // await this.loadCursos(); // Avoid calling loadCursos here if ionViewWillEnter does it
     } catch (error: any) {
       console.error('Error al crear curso:', error);
       console.error('Stack trace:', error.stack);
       await this.showAlert('Error', `No se pudo crear el curso: ${error.message || error}`);
+    } finally {
+        // Ensure isLoading is false even if creation fails but wasn't caught above
+        this.isLoading = false;
     }
   }
 
@@ -173,28 +218,28 @@ export class HomePage implements OnInit {
    * Muestra opciones para un curso
    */
   async mostrarOpcionesCurso(curso: Curso, event: Event): Promise<void> {
-    event.stopPropagation();
+    event.stopPropagation(); // Prevent row click
 
     const actionSheet = await this.actionSheetController.create({
       header: curso.nombre,
       buttons: [
         {
           text: 'Abrir',
-          icon: 'create-outline',
+          icon: 'create-outline', // Use a more appropriate icon like 'open-outline' or 'eye-outline'?
           handler: () => {
             this.selectCurso(curso);
           }
         },
         {
           text: 'Exportar CSV',
-          icon: 'download',
+          icon: 'download-outline', // Consistent icon name
           handler: async () => {
             await this.exportarCurso(curso);
           }
         },
         {
           text: 'Eliminar',
-          icon: 'trash',
+          icon: 'trash-outline', // Consistent icon name
           role: 'destructive',
           handler: async () => {
             await this.confirmarEliminarCurso(curso);
@@ -202,9 +247,10 @@ export class HomePage implements OnInit {
         },
         {
           text: 'Cancelar',
+          icon: 'close-outline', // Consistent icon name
           role: 'cancel'
         }
-      ]
+      ] as ActionSheetButton[] // Type assertion
     });
 
     await actionSheet.present();
@@ -215,13 +261,17 @@ export class HomePage implements OnInit {
    */
   private async exportarCurso(curso: Curso): Promise<void> {
     try {
+      this.isLoading = true; // Show loading
       const csv = await this.cursoService.exportCursoToCSV(curso.id);
-      const filename = `${curso.nombre.replace(/\s+/g, '_')}_${Date.now()}.csv`;
+      const filename = `${curso.nombre.replace(/[\s/\\?%*:|"<>]/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`; // Sanitize filename and add date
       await this.importExportService.exportToCSV(csv, filename);
-      await this.showAlert('Éxito', 'Curso exportado correctamente');
-    } catch (error) {
+       // Show toast instead of alert for success
+      await this.showToast('Curso exportado correctamente', 'success');
+    } catch (error: any) {
       console.error('Error al exportar curso:', error);
-      await this.showAlert('Error', 'No se pudo exportar el curso');
+      await this.showAlert('Error', `No se pudo exportar el curso: ${error?.message || error}`);
+    } finally {
+        this.isLoading = false; // Hide loading
     }
   }
 
@@ -231,7 +281,7 @@ export class HomePage implements OnInit {
   private async confirmarEliminarCurso(curso: Curso): Promise<void> {
     const alert = await this.alertController.create({
       header: 'Confirmar eliminación',
-      message: `¿Está seguro de eliminar el curso "${curso.nombre}"?`,
+      message: `¿Está seguro de eliminar el curso "<strong>${curso.nombre}</strong>"? Esta acción no se puede deshacer.`, // Use strong tag
       buttons: [
         {
           text: 'Cancelar',
@@ -239,9 +289,12 @@ export class HomePage implements OnInit {
         },
         {
           text: 'Eliminar',
-          role: 'destructive',
+          role: 'destructive', // Use role for styling
+          cssClass: 'alert-button-danger', // Optional: Custom class for more styling
           handler: async () => {
+            this.isLoading = true; // Show loading during deletion
             await this.eliminarCurso(curso);
+            this.isLoading = false; // Hide loading after deletion attempt
           }
         }
       ]
@@ -256,11 +309,16 @@ export class HomePage implements OnInit {
   private async eliminarCurso(curso: Curso): Promise<void> {
     try {
       await this.cursoService.deleteCurso(curso.id);
-      await this.showAlert('Éxito', 'Curso eliminado correctamente');
-      await this.loadCursos();
-    } catch (error) {
+      await this.showToast('Curso eliminado correctamente', 'success');
+      // No need to call loadCursos if the subscription handles updates,
+      // or if ionViewWillEnter handles reload. Check CursoService behavior.
+      // If cursoService.deleteCurso updates the BehaviorSubject, the view updates automatically.
+    } catch (error: any) {
       console.error('Error al eliminar curso:', error);
-      await this.showAlert('Error', 'No se pudo eliminar el curso');
+      await this.showAlert('Error', `No se pudo eliminar el curso: ${error?.message || error}`);
+    } finally {
+        // Ensure isLoading is false even if deletion fails but wasn't caught above
+        this.isLoading = false;
     }
   }
 
@@ -268,7 +326,7 @@ export class HomePage implements OnInit {
    * Navega a la página de configuración
    */
   goToSettings(): void {
-    this.router.navigate(['/settings']);
+    this.router.navigate(['/settings']); // Assuming '/settings' is the correct route
   }
 
   /**
@@ -282,4 +340,25 @@ export class HomePage implements OnInit {
     });
     await alert.present();
   }
-}
+
+   /**
+   * Muestra un toast de confirmación/error
+   */
+  private async showToast(message: string, color: string = 'success'): Promise<void> {
+    const toast = await this.toastController.create({
+      message,
+      duration: 2500, // Slightly longer duration
+      position: 'top',
+      color: color,
+      buttons: [
+        {
+          icon: 'close',
+          role: 'cancel'
+        }
+      ]
+    });
+    await toast.present();
+  }
+
+} // Fin de la clase HomePage
+
