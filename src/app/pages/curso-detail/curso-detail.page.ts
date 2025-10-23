@@ -80,7 +80,7 @@ const RUBRICA_INDIVIDUAL = [
     IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
     IonIcon, IonSearchbar, IonSegment, IonSegmentButton,
     IonLabel, IonSpinner, IonCheckbox,
-    ComentariosModalComponent // <--- AÑADIDO EL MODAL AQUÍ
+    ComentariosModalComponent // <--- ESTÁ AÑADIDO EL MODAL AQUÍ
   ],
   standalone: true
 })
@@ -1747,5 +1747,4 @@ export class CursoDetailPage implements OnInit {
     }
   }
 }
-
 
