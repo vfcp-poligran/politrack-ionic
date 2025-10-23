@@ -24,7 +24,7 @@ import { CursoService } from '../../core/services/curso.service';
 import { DatabaseService } from '../../core/services/database.service';
 // Importar todos los modelos necesarios
 import { Curso, Estudiante, Evaluacion, EvaluacionDetalle, Criterio, Nivel } from '../../core/models';
-import { ComentariosModalComponent } from './comentarios-modal.component';
+import { ComentariosModalComponent } from './comentarios-modal.component'; // <--- Importación del Modal
 
 // Interfaces para datos de modales y eventos
 interface PuntosEditadosData {
@@ -80,9 +80,9 @@ const RUBRICA_INDIVIDUAL = [
     IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
     IonIcon, IonSearchbar, IonSegment, IonSegmentButton,
     IonLabel, IonSpinner, IonCheckbox,
-    // ComentariosModalComponent no necesita importarse aquí si se usa con ModalController
+    ComentariosModalComponent // <--- AÑADIDO EL MODAL AQUÍ
   ],
-  standalone: true // Added standalone flag
+  standalone: true
 })
 export class CursoDetailPage implements OnInit {
   private route: ActivatedRoute = inject(ActivatedRoute);
@@ -1083,7 +1083,7 @@ export class CursoDetailPage implements OnInit {
             console.log('Evaluación individual cargada:', this.evaluacionActual.criterios);
         } else {
              console.log(`No individual evaluation data found for ${estudiante.correo} in ${entrega}. Initializing.`);
-             this.evaluacionActual.comentarios = ''; // Ensure general comments are also reset
+              this.evaluacionActual.comentarios = ''; // Ensure general comments are also reset
         }
     } catch (error: any) {
         console.error('Error cargando evaluación existente:', error);
@@ -1747,4 +1747,5 @@ export class CursoDetailPage implements OnInit {
     }
   }
 }
+
 
