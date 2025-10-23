@@ -21,7 +21,7 @@ import { CursoService } from '../../core/services/curso.service';
 import { DatabaseService } from '../../core/services/database.service';
 import { Curso } from '../../core/models/curso.model';
 import { Estudiante } from '../../core/models/estudiante.model';
-import { Evaluacion } from '../../core/models/evaluacion.model';
+import { Evaluacion, Criterio, EvaluacionDetalle } from '../../core/models/evaluacion.model';
 import { ComentariosModalComponent } from './comentarios-modal.component';
 
 // Interfaces para datos de modales y eventos
@@ -109,7 +109,7 @@ export class CursoDetailPage implements OnInit {
 
   // Entregas
   entregas = ['E1', 'E2', 'EF'];
-  entregaActiva = 'E1'; // Tipo explícito string
+  entregaActiva: 'E1' | 'E2' | 'EF' = 'E1'; // Tipo explícito union type
 
   // Panel de seguimiento
   showSeguimiento = false;
@@ -428,6 +428,30 @@ export class CursoDetailPage implements OnInit {
   }
 
   /**
+   * Muestra un toast informativo
+   */
+  private async showToast(message: string): Promise<void> {
+    const toast = await this.toastController.create({
+      message: message,
+      duration: 2000,
+      position: 'bottom'
+    });
+    await toast.present();
+  }
+
+  /**
+   * Muestra una alerta
+   */
+  private async showAlert(header: string, message: string): Promise<void> {
+    const alert = await this.alertController.create({
+      header: header,
+      message: message,
+      buttons: ['OK']
+    });
+    await alert.present();
+  }
+
+  /**
    * Alterna la visibilidad del panel de seguimiento
    */
   toggleSeguimiento(): void {
@@ -634,7 +658,7 @@ export class CursoDetailPage implements OnInit {
     const targetEval = isGrupal ? this.evaluacionGrupal : this.evaluacionActual;
 
     // Check if an evaluation is active
-    if ((!isGrupal && !targetEval.estudiante) || (isGrupal && !targetEval.subgrupo)) {
+    if ((!isGrupal && !this.evaluacionActual.estudiante) || (isGrupal && !this.evaluacionGrupal.subgrupo)) {
         this.showAlert('Error', 'Seleccione un estudiante o active la evaluación grupal primero.');
         return;
     }
@@ -1329,6 +1353,19 @@ export class CursoDetailPage implements OnInit {
       this.evaluacionActual.comentariosCriterios;
 
     return !!(comentarios && comentarios[codigoCriterio]?.trim()); // Check if exists and not empty
+  }
+
+  /**
+   * Obtiene los criterios de la entrega activa
+   */
+  getCriteriosEntregaActiva(): any[] {
+    if (this.evaluacionGrupalActiva) {
+      // Para evaluaciones grupales, usar rúbricas grupales
+      return RUBRICAS_GRUPALES[this.entregaActiva] || [];
+    } else {
+      // Para evaluaciones individuales, usar rúbrica individual
+      return RUBRICA_INDIVIDUAL;
+    }
   }
 
   /**

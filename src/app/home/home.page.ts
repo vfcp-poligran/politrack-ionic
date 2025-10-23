@@ -177,6 +177,7 @@ export class HomePage implements OnInit, OnDestroy { // Implementar OnDestroy
               this.isLoading = true; // Show loading while creating
               await this.crearCursoDesdeCSV(csvData, nombreTrimmed);
               this.isLoading = false; // Hide loading after creation attempt
+              return true; // Allow alert to dismiss
             } else {
                  // Prevent closing if name is empty and show toast/message
                  await this.showToast('El nombre del curso no puede estar vacío.', 'danger');
