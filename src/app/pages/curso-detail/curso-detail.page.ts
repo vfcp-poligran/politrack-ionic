@@ -85,8 +85,8 @@ const RUBRICA_INDIVIDUAL = [
   standalone: true // Added standalone flag
 })
 export class CursoDetailPage implements OnInit {
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
+  private route: ActivatedRoute = inject(ActivatedRoute);
+  private router: Router = inject(Router);
   private cursoService = inject(CursoService);
   private databaseService = inject(DatabaseService);
   private alertController = inject(AlertController);
@@ -188,7 +188,8 @@ export class CursoDetailPage implements OnInit {
   }
 
   async ngOnInit() {
-    this.cursoId = this.route.snapshot.paramMap.get('id') || '';
+    const cursoIdParam: string | null = this.route.snapshot.paramMap.get('id');
+    this.cursoId = cursoIdParam || '';
     if (this.cursoId) {
         await this.loadCurso();
     } else {
@@ -221,7 +222,7 @@ export class CursoDetailPage implements OnInit {
       }
 
       this.isLoading = false;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar curso:', error);
       this.isLoading = false;
       await this.showAlert('Error', 'No se pudo cargar el curso');
@@ -430,7 +431,7 @@ export class CursoDetailPage implements OnInit {
       window.URL.revokeObjectURL(url);
 
       await this.showToast('Curso exportado correctamente'); // Use showToast
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al exportar:', error);
       await this.showAlert('Error', 'No se pudo exportar el curso');
     }
@@ -646,11 +647,11 @@ export class CursoDetailPage implements OnInit {
     const isGrupal = this.evaluacionGrupalActiva;
     const targetEval = isGrupal ? this.evaluacionGrupal : this.evaluacionActual;
 
-    if (!isGrupal && !targetEval.estudiante) {
+    if (!isGrupal && !(targetEval as typeof this.evaluacionActual).estudiante) {
       this.showAlert('Error', 'Debe seleccionar un estudiante para evaluar individualmente');
       return;
     }
-    if (isGrupal && !targetEval.subgrupo) {
+    if (isGrupal && !(targetEval as typeof this.evaluacionGrupal).subgrupo) {
       this.showAlert('Error', 'Debe seleccionar un subgrupo para evaluar grupalmente');
       return;
     }
@@ -670,9 +671,9 @@ export class CursoDetailPage implements OnInit {
 
     savePromise.then(() => {
       this.actualizarVistaEvaluaciones();
-      const targetName = isGrupal ? targetEval.subgrupo : targetEval.estudiante?.nombres;
+      const targetName = isGrupal ? (targetEval as typeof this.evaluacionGrupal).subgrupo : (targetEval as typeof this.evaluacionActual).estudiante?.nombres;
       this.showToast(`Puntos ${isGrupal ? 'grupales' : 'individuales'} actualizados: ${targetName} - ${valor} pts`);
-      console.log(`Evaluando ${isGrupal ? 'grupo ' + targetEval.subgrupo : targetName}: ${criterioCodigo} = ${valor} puntos`);
+      console.log(`Evaluando ${isGrupal ? 'grupo ' + (targetEval as typeof this.evaluacionGrupal).subgrupo : targetName}: ${criterioCodigo} = ${valor} puntos`);
     }).catch(error => {
         console.error(`Error al guardar evaluación ${isGrupal ? 'grupal' : 'individual'}:`, error);
         this.showAlert('Error', `No se pudo guardar la evaluación ${isGrupal ? 'grupal' : 'individual'}`);
@@ -702,7 +703,7 @@ export class CursoDetailPage implements OnInit {
     const targetEval = isGrupal ? this.evaluacionGrupal : this.evaluacionActual;
 
     // Check if an evaluation is active
-    if ((!isGrupal && !targetEval.estudiante) || (isGrupal && !targetEval.subgrupo)) {
+    if ((!isGrupal && !this.evaluacionActual.estudiante) || (isGrupal && !this.evaluacionGrupal.subgrupo)) {
         this.showAlert('Error', 'Seleccione un estudiante o active la evaluación grupal primero.');
         return;
     }
@@ -766,7 +767,7 @@ export class CursoDetailPage implements OnInit {
         this.actualizarVistaEvaluaciones(); // Actualiza la tabla principal si es necesario
         this.showToast('Comentario y ajuste guardados');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al abrir/procesar modal de comentarios:', error);
       this.showAlert('Error', 'No se pudo guardar el comentario/ajuste');
     }
@@ -834,7 +835,7 @@ export class CursoDetailPage implements OnInit {
         if (Array.isArray(parsed)) {
            guardados = parsed;
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error('Error cargando comentarios comunes:', e);
          // Reset to default if parsing fails
         localStorage.removeItem('comentariosComunes');
@@ -1043,9 +1044,9 @@ export class CursoDetailPage implements OnInit {
             console.log('Evaluación grupal cargada:', this.evaluacionGrupal.criterios);
         } else {
              console.log(`No group evaluation data found for ${subgrupo} in ${entrega}. Initializing.`);
-             this.evaluacionGrupal.comentarios = ''; // Ensure general comments are also reset
+              this.evaluacionGrupal.comentarios = ''; // Ensure general comments are also reset
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error cargando evaluación grupal existente:', error);
     }
 }
@@ -1084,7 +1085,7 @@ export class CursoDetailPage implements OnInit {
              console.log(`No individual evaluation data found for ${estudiante.correo} in ${entrega}. Initializing.`);
              this.evaluacionActual.comentarios = ''; // Ensure general comments are also reset
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error cargando evaluación existente:', error);
     }
 }
@@ -1156,7 +1157,7 @@ export class CursoDetailPage implements OnInit {
       await this.databaseService.saveCurso(this.curso.id, this.curso);
 
       console.log('Evaluación individual guardada exitosamente');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error guardando evaluación individual:', error);
       this.showAlert('Error', 'No se pudo guardar la evaluación individual');
       throw error; // Re-throw error for promise chain
@@ -1238,7 +1239,7 @@ export class CursoDetailPage implements OnInit {
       this.mostrarResumen = true;
 
       console.log(`Evaluación grupal guardada para ${this.evaluacionGrupal.subgrupo}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error guardando evaluación grupal:', error);
       this.showAlert('Error', 'No se pudo guardar la evaluación grupal');
        throw error; // Re-throw error
@@ -1369,7 +1370,7 @@ export class CursoDetailPage implements OnInit {
           // this.evaluacionActual.comentarios = '';
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error finalizando evaluación:', error);
       this.showAlert('Error', 'No se pudo finalizar la evaluación.');
     }
@@ -1724,9 +1725,11 @@ export class CursoDetailPage implements OnInit {
         this.curso.estudiantes = this.estudiantes;
         // TODO: Considerar eliminar también las evaluaciones de this.curso.evaluaciones
         if (this.curso.evaluaciones) {
-            (Object.keys(this.curso.evaluaciones) as Array<keyof typeof this.curso.evaluaciones>).forEach(entregaKey => {
-                if (this.curso.evaluaciones[entregaKey]?.[estudiante.correo]) {
-                    delete this.curso.evaluaciones[entregaKey]?.[estudiante.correo];
+            const evaluaciones = this.curso.evaluaciones; // Create a local reference that TypeScript knows is non-null
+            (Object.keys(evaluaciones) as Array<keyof typeof evaluaciones>).forEach(entregaKey => {
+                const entregaEvals = evaluaciones[entregaKey];
+                if (entregaEvals && entregaEvals[estudiante.correo]) {
+                    delete entregaEvals[estudiante.correo];
                 }
             });
         }
