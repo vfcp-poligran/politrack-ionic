@@ -6,22 +6,24 @@ import {
   IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
   IonIcon, IonSearchbar, IonSegment, IonSegmentButton,
   IonLabel, IonSpinner, IonCheckbox,
-  AlertController, ModalController, ToastController, ActionSheetController
+  AlertController, ModalController, ToastController, ActionSheetController,
+  IonTextarea, IonInput, IonChip // Añadidos para ComentariosModalComponent (si se usa en línea)
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
   arrowBack, filterOutline, downloadOutline, addOutline, searchOutline,
   analyticsOutline, close, checkmarkCircleOutline, warningOutline, alertCircleOutline,
   documentTextOutline, locateOutline, listOutline, gitNetworkOutline, phonePortraitOutline,
-  helpOutline, megaphoneOutline, flag, createOutline, trashOutline, closeOutline, chatboxOutline, chatbox
+  helpOutline, megaphoneOutline, flag, createOutline, trashOutline, closeOutline, chatboxOutline, chatbox,
+  buildOutline, refreshOutline, laptopOutline, codeWorkingOutline, videocamOutline, // Añadidos para getCriterioIcon
+  checkmarkDoneOutline, constructOutline, colorPaletteOutline, peopleOutline, timerOutline, terminalOutline // Añadidos para getCriterioIcon
 } from 'ionicons/icons'; // Added necessary icons
 import { ActionSheetButton } from '@ionic/core'; // For ActionSheetController types
 
 import { CursoService } from '../../core/services/curso.service';
 import { DatabaseService } from '../../core/services/database.service';
-import { Curso } from '../../core/models/curso.model';
-import { Estudiante } from '../../core/models/estudiante.model';
-import { Evaluacion, Criterio, EvaluacionDetalle } from '../../core/models/evaluacion.model';
+// Importar todos los modelos necesarios
+import { Curso, Estudiante, Evaluacion, EvaluacionDetalle, Criterio, Nivel } from '../../core/models';
 import { ComentariosModalComponent } from './comentarios-modal.component';
 
 // Interfaces para datos de modales y eventos
@@ -77,8 +79,8 @@ const RUBRICA_INDIVIDUAL = [
     FormsModule,
     IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
     IonIcon, IonSearchbar, IonSegment, IonSegmentButton,
-    IonLabel, IonSpinner, IonCheckbox, // IonCheckbox is used in the template
-    // IonBackButton is not explicitly used in the template, removing if not needed elsewhere
+    IonLabel, IonSpinner, IonCheckbox,
+    // ComentariosModalComponent no necesita importarse aquí si se usa con ModalController
   ],
   standalone: true // Added standalone flag
 })
@@ -109,7 +111,7 @@ export class CursoDetailPage implements OnInit {
 
   // Entregas
   entregas = ['E1', 'E2', 'EF'];
-  entregaActiva: 'E1' | 'E2' | 'EF' = 'E1'; // Tipo explícito union type
+  entregaActiva: 'E1' | 'E2' | 'EF' = 'E1'; // Tipo explícito
 
   // Panel de seguimiento
   showSeguimiento = false;
@@ -177,7 +179,9 @@ export class CursoDetailPage implements OnInit {
       arrowBack, filterOutline, downloadOutline, addOutline, searchOutline,
       analyticsOutline, close, checkmarkCircleOutline, warningOutline, alertCircleOutline,
       documentTextOutline, locateOutline, listOutline, gitNetworkOutline, phonePortraitOutline,
-      helpOutline, megaphoneOutline, flag, createOutline, trashOutline, closeOutline, chatboxOutline, chatbox // Added missing icons
+      helpOutline, megaphoneOutline, flag, createOutline, trashOutline, closeOutline, chatboxOutline, chatbox,
+      buildOutline, refreshOutline, laptopOutline, codeWorkingOutline, videocamOutline, // Añadidos
+      checkmarkDoneOutline, constructOutline, colorPaletteOutline, peopleOutline, timerOutline, terminalOutline // Añadidos
     });
     // Cargar comentarios comunes
     this.cargarComentariosComunes();
@@ -185,7 +189,14 @@ export class CursoDetailPage implements OnInit {
 
   async ngOnInit() {
     this.cursoId = this.route.snapshot.paramMap.get('id') || '';
-    await this.loadCurso();
+    if (this.cursoId) {
+        await this.loadCurso();
+    } else {
+        console.error("No se proporcionó ID de curso.");
+        this.isLoading = false;
+        await this.showAlert('Error', 'No se especificó un ID de curso.');
+        this.goBack(); // Regresar si no hay ID
+    }
   }
 
   /**
@@ -199,13 +210,14 @@ export class CursoDetailPage implements OnInit {
       if (this.curso) {
         this.estudiantes = this.curso.estudiantes || [];
         this.extractSubgrupos();
-        this.applyFilters();
-         // Cargar evaluaciones después de cargar el curso y estudiantes
+        // Cargar evaluaciones ANTES de aplicar filtros
         this.curso.evaluaciones = await this.databaseService.getEvaluacionesCurso(this.cursoId);
+        this.applyFilters(); // Aplicar filtros después de tener todos los datos
       } else {
          console.warn(`Curso con ID ${this.cursoId} no encontrado.`);
          this.estudiantes = [];
          this.subgrupos = [];
+         this.curso = null; // Asegurarse que curso es null
       }
 
       this.isLoading = false;
@@ -349,7 +361,7 @@ export class CursoDetailPage implements OnInit {
    */
   private updateSelectAllState(): void {
     const numFiltered = this.estudiantesFiltrados.length;
-    const numSelected = this.selectedEstudiantes.size; // Use size for Set
+    // const numSelected = this.selectedEstudiantes.size; // No se usa numSelected
 
     // Check if all *currently filtered* students are selected
     if (numFiltered > 0) {
@@ -398,9 +410,13 @@ export class CursoDetailPage implements OnInit {
    * Exporta los datos del curso
    */
   async exportarCurso(): Promise<void> {
+    if (!this.cursoId || !this.curso) {
+        this.showAlert('Error', 'No hay curso cargado para exportar.');
+        return;
+    }
     try {
       const csv = await this.cursoService.exportCursoToCSV(this.cursoId);
-      const filename = `${this.curso?.nombre.replace(/\s+/g, '_')}_${Date.now()}.csv`;
+      const filename = `${this.curso?.nombre.replace(/[\s/\\?%*:|"<>]/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`;
 
       // En web, descargar el archivo
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' }); // Added charset
@@ -425,30 +441,6 @@ export class CursoDetailPage implements OnInit {
    */
   goBack(): void {
     this.router.navigate(['/home']);
-  }
-
-  /**
-   * Muestra un toast informativo
-   */
-  private async showToast(message: string): Promise<void> {
-    const toast = await this.toastController.create({
-      message: message,
-      duration: 2000,
-      position: 'bottom'
-    });
-    await toast.present();
-  }
-
-  /**
-   * Muestra una alerta
-   */
-  private async showAlert(header: string, message: string): Promise<void> {
-    const alert = await this.alertController.create({
-      header: header,
-      message: message,
-      buttons: ['OK']
-    });
-    await alert.present();
   }
 
   /**
@@ -482,11 +474,12 @@ export class CursoDetailPage implements OnInit {
     if (subgrupo === '') {
       // Todos los grupos - desactivar evaluación grupal
       this.evaluacionGrupalActiva = false;
-      // Do not clear individual evaluation if one is active
-      // this.evaluacionActual.estudiante = null;
-      // this.evaluacionActual.esGrupal = false;
       this.limpiarEvaluacionGrupal();
       this.mostrarResumen = false; // Ocultar resumen al cambiar de grupo
+      // Mantener la evaluación individual si estaba activa
+      if (this.evaluacionActual.estudiante) {
+          this.iniciarEvaluacion(this.evaluacionActual.estudiante); // Recargar eval individual
+      }
     } else {
       // Subgrupo específico - activar evaluación grupal
       this.activarRubricaGrupal(subgrupo);
@@ -646,7 +639,58 @@ export class CursoDetailPage implements OnInit {
     return colors[hashCode % colors.length];
   }
 
-  // --- Refactorización de selectNivel (ya implementada arriba) ---
+  /**
+   * Selecciona un nivel para un criterio (refactorizado)
+   */
+  selectNivel(criterioCodigo: string, valor: number): void {
+    const isGrupal = this.evaluacionGrupalActiva;
+    const targetEval = isGrupal ? this.evaluacionGrupal : this.evaluacionActual;
+
+    if (!isGrupal && !targetEval.estudiante) {
+      this.showAlert('Error', 'Debe seleccionar un estudiante para evaluar individualmente');
+      return;
+    }
+    if (isGrupal && !targetEval.subgrupo) {
+      this.showAlert('Error', 'Debe seleccionar un subgrupo para evaluar grupalmente');
+      return;
+    }
+
+    // Toggle: if same value clicked, deselect (set to 0 or undefined)
+    if (targetEval.criterios[criterioCodigo] === valor) {
+        delete targetEval.criterios[criterioCodigo]; // O set to 0 if preferred
+        valor = 0; // Para el log
+    } else {
+        targetEval.criterios[criterioCodigo] = valor;
+    }
+
+
+    const savePromise = isGrupal
+      ? this.guardarEvaluacionGrupal()
+      : this.guardarEvaluacionActual();
+
+    savePromise.then(() => {
+      this.actualizarVistaEvaluaciones();
+      const targetName = isGrupal ? targetEval.subgrupo : targetEval.estudiante?.nombres;
+      this.showToast(`Puntos ${isGrupal ? 'grupales' : 'individuales'} actualizados: ${targetName} - ${valor} pts`);
+      console.log(`Evaluando ${isGrupal ? 'grupo ' + targetEval.subgrupo : targetName}: ${criterioCodigo} = ${valor} puntos`);
+    }).catch(error => {
+        console.error(`Error al guardar evaluación ${isGrupal ? 'grupal' : 'individual'}:`, error);
+        this.showAlert('Error', `No se pudo guardar la evaluación ${isGrupal ? 'grupal' : 'individual'}`);
+    });
+  }
+
+  /**
+   * Obtiene el valor seleccionado para un criterio
+   */
+  getCriterioValue(criterio: string): number | null {
+    if (this.evaluacionGrupalActiva) {
+      return this.evaluacionGrupal.criterios[criterio] ?? null; // Use ?? null
+    } else {
+      if (!this.evaluacionActual.estudiante) return null;
+      return this.evaluacionActual.criterios[criterio] ?? null; // Use ?? null
+    }
+  }
+
 
   /**
    * Abre el modal de comentarios para un criterio
@@ -658,15 +702,28 @@ export class CursoDetailPage implements OnInit {
     const targetEval = isGrupal ? this.evaluacionGrupal : this.evaluacionActual;
 
     // Check if an evaluation is active
-    if ((!isGrupal && !this.evaluacionActual.estudiante) || (isGrupal && !this.evaluacionGrupal.subgrupo)) {
+    if ((!isGrupal && !targetEval.estudiante) || (isGrupal && !targetEval.subgrupo)) {
         this.showAlert('Error', 'Seleccione un estudiante o active la evaluación grupal primero.');
         return;
     }
 
 
     const comentariosActuales = targetEval.comentariosCriterios[codigoCriterio] || '';
-    const puntajeOriginal = targetEval.criterios[codigoCriterio] ?? 0; // Default to 0 if undefined
+    // Obtener puntaje base (antes de ajustes)
+    const nivelSeleccionado = targetEval.criterios[codigoCriterio];
+    const criterioDef = this.getCriteriosEntregaActiva().find(c => c.codigo === codigoCriterio);
+    const nivel = criterioDef?.niveles.find((n: any) => n.valor === nivelSeleccionado);
+    const puntajeBase = nivel ? nivel.valor : 0; // O el valor seleccionado si no hay niveles? No, el valor base del nivel.
+                                                 // Esto es ambiguo. Asumamos que puntajeOriginal es el puntaje *antes* de este ajuste.
+                                                 // El puntaje guardado en `criterios` YA incluye el ajuste.
+                                                 // Necesitamos el puntaje base del nivel SELECCIONADO.
+
     const ajusteActual = targetEval.ajustesPuntaje[codigoCriterio] || 0;
+    // Si hay un ajuste, el puntaje original (base) es el puntaje guardado MENOS el ajuste.
+    // O, si no hay ajuste, es el puntaje guardado.
+    // O, si no hay puntaje guardado, es 0.
+    const puntajeGuardado = targetEval.criterios[codigoCriterio] ?? 0;
+    const puntajeOriginal = puntajeGuardado - ajusteActual; // Esto recalcula el puntaje base del nivel
 
     try {
       const modal = await this.modalController.create({
@@ -674,8 +731,8 @@ export class CursoDetailPage implements OnInit {
         componentProps: {
           criterioNombre: nombreCriterio,
           comentarios: comentariosActuales,
-          puntajeOriginal: puntajeOriginal,
-          ajustePuntaje: ajusteActual,
+          puntajeOriginal: puntajeOriginal, // Puntaje base del nivel
+          ajustePuntaje: ajusteActual, // Ajuste actual
           comentariosComunes: this.comentariosComunes
         }
       });
@@ -723,7 +780,7 @@ export class CursoDetailPage implements OnInit {
     if (!niveles || indiceNivel >= niveles.length) return '';
 
     const nivelActual = niveles[indiceNivel];
-    const nivelSiguiente = niveles[indiceNivel + 1];
+    // const nivelSiguiente = niveles[indiceNivel + 1]; // No usado en lógica corregida
     const nivelAnterior = niveles[indiceNivel - 1];
 
     if (indiceNivel === 0) {
@@ -758,14 +815,24 @@ export class CursoDetailPage implements OnInit {
    * Carga comentarios comunes desde localStorage
    */
   private cargarComentariosComunes(): void {
-    const guardados = localStorage.getItem('comentariosComunes');
-    if (guardados) {
+    // Cargar desde defaults
+    const defaults = [
+        'Excelente trabajo, sigue así',
+        'Buen desempeño, pero puede mejorar',
+        'Necesita más participación en las actividades',
+        'Cumplió con los objetivos planteados',
+        'Faltó profundidad en el análisis',
+        'Presenta avances significativos',
+        'Requiere mayor compromiso con el equipo'
+    ];
+    let guardados: string[] = [];
+    const guardadosJson = localStorage.getItem('comentariosComunes');
+
+    if (guardadosJson) {
       try {
-        const parsed = JSON.parse(guardados);
+        const parsed = JSON.parse(guardadosJson);
         if (Array.isArray(parsed)) {
-           // Combine default and saved, avoiding duplicates
-           const combined = new Set([...this.comentariosComunes, ...parsed]);
-           this.comentariosComunes = Array.from(combined);
+           guardados = parsed;
         }
       } catch (e) {
         console.error('Error cargando comentarios comunes:', e);
@@ -773,6 +840,10 @@ export class CursoDetailPage implements OnInit {
         localStorage.removeItem('comentariosComunes');
       }
     }
+    // Combinar defaults y guardados, asegurando unicidad
+    const combined = new Set([...defaults, ...guardados]);
+    this.comentariosComunes = Array.from(combined);
+
     // TODO: Load from DatabaseService if implemented
     // this.comentariosComunes = await this.databaseService.getComentariosPredefinidos('general');
   }
@@ -948,6 +1019,11 @@ export class CursoDetailPage implements OnInit {
             }
         }
 
+         // Reset criteria before loading
+        this.evaluacionGrupal.criterios = {};
+        this.evaluacionGrupal.comentariosCriterios = {};
+        this.evaluacionGrupal.ajustesPuntaje = {};
+
         if (evaluacionRepresentativa?.grup_eval) {
             const grupEval = evaluacionRepresentativa.grup_eval;
             const criteriosGuardados = grupEval.criterios || [];
@@ -967,11 +1043,7 @@ export class CursoDetailPage implements OnInit {
             console.log('Evaluación grupal cargada:', this.evaluacionGrupal.criterios);
         } else {
              console.log(`No group evaluation data found for ${subgrupo} in ${entrega}. Initializing.`);
-             // Ensure criteria object is clean if no data found
-             this.evaluacionGrupal.criterios = {};
-             this.evaluacionGrupal.comentariosCriterios = {};
-             this.evaluacionGrupal.ajustesPuntaje = {};
-             this.evaluacionGrupal.comentarios = '';
+             this.evaluacionGrupal.comentarios = ''; // Ensure general comments are also reset
         }
     } catch (error) {
         console.error('Error cargando evaluación grupal existente:', error);
@@ -986,15 +1058,15 @@ export class CursoDetailPage implements OnInit {
     try {
         const evaluacionExistente = this.getEvaluacion(estudiante.correo, entrega);
 
+         // Reset current eval criteria before loading
+        this.evaluacionActual.criterios = {};
+        this.evaluacionActual.comentariosCriterios = {};
+        this.evaluacionActual.ajustesPuntaje = {};
+
         if (evaluacionExistente?.ind_eval) {
             const indEval = evaluacionExistente.ind_eval;
             const criteriosGuardados = indEval.criterios || [];
             const criteriosActivos = this.getCriteriosEntregaActiva(); // Uses RUBRICA_INDIVIDUAL
-
-             // Reset current eval criteria before loading
-            this.evaluacionActual.criterios = {};
-            this.evaluacionActual.comentariosCriterios = {};
-            this.evaluacionActual.ajustesPuntaje = {};
 
             criteriosGuardados.forEach((criterioGuardado: any) => {
                 const criterioConfig = criteriosActivos.find((c: any) => c.nombre === criterioGuardado.nombre);
@@ -1010,11 +1082,7 @@ export class CursoDetailPage implements OnInit {
             console.log('Evaluación individual cargada:', this.evaluacionActual.criterios);
         } else {
              console.log(`No individual evaluation data found for ${estudiante.correo} in ${entrega}. Initializing.`);
-             // Ensure criteria object is clean if no data found
-             this.evaluacionActual.criterios = {};
-             this.evaluacionActual.comentariosCriterios = {};
-             this.evaluacionActual.ajustesPuntaje = {};
-             this.evaluacionActual.comentarios = '';
+             this.evaluacionActual.comentarios = ''; // Ensure general comments are also reset
         }
     } catch (error) {
         console.error('Error cargando evaluación existente:', error);
@@ -1309,6 +1377,70 @@ export class CursoDetailPage implements OnInit {
 
 
   /**
+   * Obtiene los criterios de la entrega activa
+   * Se usan las constantes definidas fuera de la clase
+   */
+  getCriteriosEntregaActiva(): any[] { // Considerar crear una interfaz para el retorno
+    // Si hay evaluación grupal activa, mostrar rúbrica grupal
+    if (this.evaluacionGrupalActiva && this.subgrupoSeleccionado && this.subgrupoSeleccionado !== '') {
+      const entrega = this.entregaActiva as 'E1' | 'E2' | 'EF';
+      // Usa la constante externa
+      return RUBRICAS_GRUPALES[entrega] || RUBRICAS_GRUPALES['E1'];
+    } else {
+      // Usa la constante externa
+      return RUBRICA_INDIVIDUAL;
+    }
+  }
+
+  /**
+   * Obtiene estadísticas de un criterio
+   */
+  getCriterioStats(codigo: string): any[] {
+    // Obtener criterios específicos por entrega y tipo
+    const criterios = this.getCriteriosEntregaActiva();
+    const criterio = criterios.find((c: any) => c.codigo === codigo);
+
+    if (!criterio) {
+      return [
+        { label: 'N/A', value: '0', color: 'var(--ion-color-medium)' }
+      ];
+    }
+
+    // Generar estadísticas basadas en los niveles del criterio
+    return criterio.niveles.map((nivel: any, index: number) => ({
+      label: `${nivel.nombre.charAt(0)}(${nivel.valor})`,
+      value: Math.floor(Math.random() * 3).toString(), // Datos de ejemplo
+      color: index === 0 ? 'var(--ion-color-danger)' :
+             index === 1 ? 'var(--ion-color-warning)' :
+             'var(--ion-color-success)'
+    }));
+  }
+
+  /**
+   * Obtiene el resumen de criterios
+   */
+  getResumenCriterios(): any[] {
+    return [
+      {
+        criterio: 'Criterio 1 (Justificación)',
+        estadisticas: 'I(0), A(1), E(2) - Nivel Alcanzado: N/A (0 Puntos)'
+      },
+      {
+        criterio: 'Criterio 2 (Objetivos)',
+        estadisticas: 'I(1), A(2), E(3) - Nivel Alcanzado: N/A (0 Puntos)'
+      },
+      {
+        criterio: 'Criterio 3 (Requerimientos)',
+        estadisticas: 'I(4), A(8), E(10) - Nivel Alcanzado: N/A (0 Puntos)'
+      },
+      {
+        criterio: 'Criterio 4 (Flujo de Navegación)',
+        estadisticas: 'I(9), A(20), E(30) - Nivel Alcanzado: N/A (0 Puntos)'
+      }
+    ];
+  }
+
+  /**
    * Obtiene el resumen completo de la rúbrica para la entrega activa (para mostrar en sección resumen)
    */
   getResumenRubrica(): any[] { // Considerar crear una interfaz para el retorno
@@ -1356,42 +1488,34 @@ export class CursoDetailPage implements OnInit {
   }
 
   /**
-   * Obtiene los criterios de la entrega activa
-   */
-  getCriteriosEntregaActiva(): any[] {
-    if (this.evaluacionGrupalActiva) {
-      // Para evaluaciones grupales, usar rúbricas grupales
-      return RUBRICAS_GRUPALES[this.entregaActiva] || [];
-    } else {
-      // Para evaluaciones individuales, usar rúbrica individual
-      return RUBRICA_INDIVIDUAL;
-    }
-  }
-
-  /**
    * Obtiene el rendimiento de una entrega específica
+   * Changed parameter type from 'E1' | 'E2' | 'EF' to string
    */
-  getRendimientoEntrega(entrega: 'E1' | 'E2' | 'EF'): string {
+  getRendimientoEntrega(entrega: string): string { // <-- Cambiado aquí
       const targetSubgrupo = this.evaluacionGrupal.subgrupo;
       const targetEstudiante = this.evaluacionActual.estudiante;
-      const maximo = entrega === 'EF' ? 100 : 75; // Máximo puntaje base por entrega
+      // Use type assertion inside if needed, or validate the string
+      const entregaKey = entrega as 'E1' | 'E2' | 'EF';
+      const maximo = entregaKey === 'EF' ? 100 : 75; // Máximo puntaje base por entrega
 
       let evaluacion: Evaluacion | null = null;
 
       if (this.evaluacionGrupalActiva && targetSubgrupo) {
-          // Find representative eval for the group
-          const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === targetSubgrupo);
-          if (estudiantesGrupo.length > 0) {
-              evaluacion = this.getEvaluacion(estudiantesGrupo[0].correo, entrega);
-          }
+        // Obtener evaluación grupal del primer estudiante del grupo
+        const estudiantesGrupo = this.estudiantes.filter(est => est.subgrupo === targetSubgrupo);
+        if (estudiantesGrupo.length > 0) {
+            evaluacion = this.getEvaluacion(estudiantesGrupo[0].correo, entrega);
+        }
       } else if (targetEstudiante) {
-          evaluacion = this.getEvaluacion(targetEstudiante.correo, entrega);
+         evaluacion = this.getEvaluacion(targetEstudiante.correo, entrega);
       }
 
       if (evaluacion) {
-          const total = evaluacion.sumatoria ?? 0;
-          const porcentaje = maximo > 0 ? Math.round((total / maximo) * 100) : 0;
-          return `${total}/${maximo} pts (${porcentaje}%) - ${this.getTextoRendimientoPorPorcentaje(porcentaje)}`;
+        const total = evaluacion.sumatoria ?? 0; // Use sumatoria
+        // Max score calculation might need to be more dynamic if rubricas change
+        // const maximo = this.getMaximoPuntaje(); // This would get max for *active* entrega
+        const porcentaje = maximo > 0 ? Math.round((total / maximo) * 100) : 0;
+        return `${total}/${maximo} pts (${porcentaje}%) - ${this.getTextoRendimientoPorPorcentaje(porcentaje)}`;
       }
 
       return `0/${maximo} pts (0%) - Sin evaluar`;
@@ -1401,11 +1525,223 @@ export class CursoDetailPage implements OnInit {
    * Obtiene el texto de rendimiento según un porcentaje dado
    */
   private getTextoRendimientoPorPorcentaje(porcentaje: number): string {
-    // Re-using the logic from getTextoRendimiento, ensure it handles 0 correctly if needed
+    if (porcentaje <= 0) return 'Sin evaluar'; // Changed from === 0
     if (porcentaje < 40) return 'Malo';
     if (porcentaje < 60) return 'Deficiente';
     if (porcentaje < 75) return 'Aceptable';
     if (porcentaje < 90) return 'Bueno';
     return 'Excelente';
   }
+
+  /**
+   * Muestra un alert
+   */
+  private async showAlert(header: string, message: string): Promise<void> {
+    const alert = await this.alertController.create({
+      header,
+      message,
+      buttons: ['OK']
+    });
+    await alert.present();
+  }
+
+  /**
+   * Muestra un toast de confirmación
+   */
+  private async showToast(message: string, color: string = 'success'): Promise<void> {
+    const toast = await this.toastController.create({
+      message,
+      duration: 2000,
+      position: 'top',
+      color,
+      buttons: [
+        {
+          icon: 'close',
+          role: 'cancel'
+        }
+      ]
+    });
+    await toast.present();
+  }
+
+  /**
+   * Abre menú contextual para editar o eliminar estudiante
+   * Changed event type from 'any' to 'Event'
+   */
+  async abrirMenuContexto(estudiante: Estudiante, event: Event): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Usar ActionSheetController para un look & feel más nativo
+    const actionSheet = await this.actionSheetController.create({
+        header: `${estudiante.nombres} ${estudiante.apellidos}`,
+        subHeader: estudiante.correo,
+        buttons: [
+            { text: 'Editar E1', icon: 'create-outline', handler: () => this.abrirEditorPuntos(estudiante, 'E1') },
+            { text: 'Editar E2', icon: 'create-outline', handler: () => this.abrirEditorPuntos(estudiante, 'E2') },
+            { text: 'Editar EF', icon: 'create-outline', handler: () => this.abrirEditorPuntos(estudiante, 'EF') },
+            { text: 'Eliminar estudiante', icon: 'trash-outline', role: 'destructive', handler: () => this.confirmarEliminacion(estudiante) },
+            { text: 'Cancelar', icon: 'close-outline', role: 'cancel' }
+        ] as ActionSheetButton[] // Tipado explícito
+    });
+    await actionSheet.present();
+  }
+
+  /**
+   * Abre un editor para modificar puntos de forma inline
+   */
+  async abrirEditorPuntos(estudiante: Estudiante, entrega: 'E1' | 'E2' | 'EF'): Promise<void> {
+    const evaluacion = this.getEvaluacion(estudiante.correo, entrega);
+    const pgScore = evaluacion?.pg_score ?? ''; // Use ?? ''
+    const piScore = evaluacion?.pi_score ?? ''; // Use ?? ''
+
+    const alert = await this.alertController.create({
+      header: `Editar ${entrega} - ${estudiante.nombres} ${estudiante.apellidos}`,
+      inputs: [
+        {
+          name: 'pg_score',
+          type: 'number',
+          placeholder: 'PG (Puntos Grupal)',
+          value: pgScore,
+          min: 0, // Use number
+          max: 100 // Use number
+        },
+        {
+          name: 'pi_score',
+          type: 'number',
+          placeholder: 'PI (Puntos Individual)',
+          value: piScore,
+          min: 0, // Use number
+          max: 100 // Use number
+        }
+      ],
+      buttons: [
+        {
+          text: 'Cancelar',
+          role: 'cancel'
+        },
+        {
+          text: 'Guardar',
+          handler: async (data: PuntosEditadosData) => { // Tipado más específico para data
+            await this.guardarPuntosEditados(estudiante, entrega, data);
+          }
+        }
+      ]
+    });
+
+    await alert.present();
+  }
+
+  /**
+   * Guarda los puntos editados
+   * Changed data type from 'any' to 'PuntosEditadosData'
+   */
+  private async guardarPuntosEditados(estudiante: Estudiante, entrega: 'E1' | 'E2' | 'EF', data: PuntosEditadosData): Promise<void> {
+    try {
+      // Convertir a número asegurándose de manejar undefined o string vacío
+      const pgScoreNum = Number(data.pg_score ?? 0);
+      const piScoreNum = Number(data.pi_score ?? 0);
+
+      // Validar si son números válidos antes de usar (opcional pero recomendado)
+      const pgScore = !isNaN(pgScoreNum) ? pgScoreNum : 0;
+      const piScore = !isNaN(piScoreNum) ? piScoreNum : 0;
+      const sumatoria = pgScore + piScore;
+
+      // Actualizar la evaluación en el servicio
+      // Re-usar la lógica de guardado existente
+      if (!this.curso) throw new Error("Curso no está cargado.");
+      if (!this.curso.evaluaciones) {
+          this.curso.evaluaciones = { E1: {}, E2: {}, EF: {} };
+      }
+      const entregaKey = entrega as keyof typeof this.curso.evaluaciones;
+      if (!this.curso.evaluaciones[entregaKey]) {
+          this.curso.evaluaciones[entregaKey] = {};
+      }
+      const entregaEvals = this.curso.evaluaciones[entregaKey];
+      if (!entregaEvals) throw new Error("Evaluaciones de entrega no encontradas.");
+
+      const evaluacionExistente = entregaEvals[estudiante.correo] || { correo: estudiante.correo };
+
+      const evaluacionCompleta: Evaluacion = {
+        ...evaluacionExistente, // Preservar detalles existentes (ind_eval, grup_eval)
+        correo: estudiante.correo,
+        pg_score: pgScore,
+        pi_score: piScore,
+        sumatoria: sumatoria,
+      };
+
+      entregaEvals[estudiante.correo] = evaluacionCompleta;
+
+      // Guardar en la base de datos
+      await this.databaseService.saveCurso(this.curso.id, this.curso);
+
+      await this.showToast(`Puntos de ${entrega} guardados correctamente`);
+      // Refrescar la vista de la tabla
+      this.actualizarVistaEvaluaciones(); // Usar el método existente
+      // await this.loadCurso(); // Evitar recarga completa si es posible
+    } catch (error: any) {
+      console.error('Error al guardar puntos:', error);
+      await this.showAlert('Error', `No se pudieron guardar los puntos: ${error?.message || error}`);
+    }
+  }
+
+  /**
+   * Confirma la eliminación de un estudiante del curso
+   */
+  private async confirmarEliminacion(estudiante: Estudiante): Promise<void> {
+    const alert = await this.alertController.create({
+      header: 'Confirmar eliminación',
+      message: `¿Está seguro de que desea eliminar a ${estudiante.nombres} ${estudiante.apellidos} de este curso? Esta acción no se puede deshacer.`,
+      buttons: [
+        {
+          text: 'Cancelar',
+          role: 'cancel'
+        },
+        {
+          text: 'Eliminar',
+          role: 'destructive',
+          handler: async () => {
+            await this.eliminarEstudiante(estudiante);
+          }
+        }
+      ]
+    });
+
+    await alert.present();
+  }
+
+  /**
+   * Elimina un estudiante del curso
+   */
+  private async eliminarEstudiante(estudiante: Estudiante): Promise<void> {
+    try {
+      if (this.curso) {
+        // Eliminar del array local
+        this.estudiantes = this.estudiantes.filter(e => e.correo !== estudiante.correo);
+        this.estudiantesFiltrados = this.estudiantesFiltrados.filter(e => e.correo !== estudiante.correo);
+
+        // Actualizar el curso en la base de datos
+        this.curso.estudiantes = this.estudiantes;
+        // TODO: Considerar eliminar también las evaluaciones de this.curso.evaluaciones
+        if (this.curso.evaluaciones) {
+            (Object.keys(this.curso.evaluaciones) as Array<keyof typeof this.curso.evaluaciones>).forEach(entregaKey => {
+                if (this.curso.evaluaciones[entregaKey]?.[estudiante.correo]) {
+                    delete this.curso.evaluaciones[entregaKey]?.[estudiante.correo];
+                }
+            });
+        }
+
+        await this.databaseService.saveCurso(this.cursoId, this.curso);
+         // Podríamos también llamar a un método específico en DatabaseService
+         // await this.databaseService.deleteEstudiante(this.cursoId, estudiante.correo);
+
+        await this.showToast(`${estudiante.nombres} ${estudiante.apellidos} ha sido eliminado del curso`, 'success');
+        this.applyFilters(); // Refrescar la vista
+      }
+    } catch (error: any) {
+      console.error('Error al eliminar estudiante:', error);
+      await this.showAlert('Error', `No se pudo eliminar el estudiante: ${error?.message || error}`);
+    }
+  }
 }
+
