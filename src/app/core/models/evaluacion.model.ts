@@ -6,6 +6,8 @@ export interface EvaluacionDetalle {
   totalScore: number;
   comentarios?: string;
   fecha?: string;
+  comentariosCriterios?: { [criterioCodigo: string]: string };
+  ajustesPuntaje?: { [criterioCodigo: string]: number };
 }
 
 /**
@@ -38,6 +40,7 @@ export interface Evaluacion {
   ind_eval?: EvaluacionDetalle;
   grup_eval?: EvaluacionDetalle;
   sumatoria?: number;
+  updatedAt?: string; // <-- Agrega esta línea
 }
 
 /**

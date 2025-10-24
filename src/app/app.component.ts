@@ -1,39 +1,27 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
+import { Component, inject } from '@angular/core';
+import { IonApp, IonRouterOutlet, Platform } from '@ionic/angular/standalone';
 import { DatabaseService } from './core/services/database.service';
-import { StorageService } from './core/services/storage.service';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-root',
   templateUrl: 'app.component.html',
-  imports: [IonApp, IonRouterOutlet],
+  styleUrls: ['app.component.scss'],
+  standalone: true,
+  imports: [IonApp, IonRouterOutlet, CommonModule],
 })
-export class AppComponent implements OnInit {
-  private databaseService = inject(DatabaseService);
-  private storageService = inject(StorageService);
+export class AppComponent {
 
-  async ngOnInit() {
-    await this.initializeApp();
+  // No necesitamos injectar Platform o DatabaseService aquí si usamos APP_INITIALIZER
+  // private platform = inject(Platform);
+  // private databaseService = inject(DatabaseService);
+
+  constructor() {
+    // La inicialización ahora ocurre a través de APP_INITIALIZER en main.ts
+    console.log('AppComponent Constructor: La inicialización de la BD debería estar en curso o completada.');
+    // this.initializeApp(); // --- CORRECCIÓN: Eliminado ---
   }
 
-  /**
-   * Inicializa la aplicación y los servicios necesarios
-   */
-  private async initializeApp(): Promise<void> {
-    try {
-      console.log('Iniciando POLITrack...');
-
-      // Inicializar Storage
-      await this.storageService.init();
-      console.log('Storage inicializado');
-
-      // Inicializar Base de Datos
-      await this.databaseService.init();
-      console.log('Base de datos inicializada');
-
-      console.log('POLITrack iniciado correctamente');
-    } catch (error) {
-      console.error('Error al inicializar la aplicación:', error);
-    }
-  }
+  // --- CORRECCIÓN: Método eliminado ---
+  // async initializeApp() { ... }
 }

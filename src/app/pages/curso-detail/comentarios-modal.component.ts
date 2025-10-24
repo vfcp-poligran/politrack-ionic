@@ -1,263 +1,213 @@
-import { Component, Input, inject } from '@angular/core';
+import { Component, Input, OnInit, inject } from '@angular/core';
+import { ModalController } from '@ionic/angular/standalone';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
-  IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
-  IonIcon, IonTextarea, IonInput, IonChip,
-  ModalController
+  IonHeader, IonToolbar, IonTitle, IonContent, IonButton, IonIcon,
+  IonTextarea, IonInput, IonItem, IonLabel, IonChip, IonCheckbox,
+  IonFooter, IonButtons // <--- AÑADIDO IonButtons
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { close, saveOutline, addCircleOutline } from 'ionicons/icons';
+import { close, save, addCircleOutline } from 'ionicons/icons';
 
 @Component({
   selector: 'app-comentarios-modal',
-  standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton,
-    IonIcon, IonTextarea, IonInput, IonChip
-  ],
   template: `
-    <ion-header>
-      <ion-toolbar>
-        <ion-title>Comentarios - {{ criterioNombre }}</ion-title>
+    <ion-header class="ion-no-border">
+      <ion-toolbar color="primary">
+        <ion-title>Comentarios y Ajuste - {{ criterioNombre }}</ion-title>
         <ion-buttons slot="end">
-          <ion-button (click)="cerrar()">
-            <ion-icon name="close" slot="icon-only"></ion-icon>
+          <ion-button (click)="cancelar()">
+            <ion-icon slot="icon-only" name="close"></ion-icon>
           </ion-button>
         </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
     <ion-content class="ion-padding">
-      <!-- Ajuste de puntaje -->
-      <div class="puntaje-section" *ngIf="puntajeOriginal !== undefined">
-        <h4>Ajuste de Puntaje</h4>
-        <div class="puntaje-info">
-          <div class="puntaje-item">
-            <span class="label">Puntaje original:</span>
-            <span class="value">{{ puntajeOriginal }}</span>
-          </div>
-          <div class="puntaje-item">
-            <span class="label">Ajuste:</span>
-            <ion-input
-              type="number"
-              [(ngModel)]="ajustePuntaje"
-              placeholder="0"
-              fill="outline"
-              style="max-width: 100px;">
-            </ion-input>
-          </div>
-          <div class="puntaje-item total">
-            <span class="label">Puntaje final:</span>
-            <span class="value final">{{ calcularPuntajeFinal() }}</span>
-          </div>
-        </div>
-        <p class="ajuste-nota" *ngIf="ajustePuntaje !== 0">
-          {{ ajustePuntaje > 0 ? '+' : '' }}{{ ajustePuntaje }} puntos 
-          {{ ajustePuntaje > 0 ? 'agregados' : 'descontados' }}
-        </p>
-      </div>
+      <ion-item class="comentario-textarea">
+        <ion-label position="floating">Comentarios</ion-label>
+        <ion-textarea [(ngModel)]="comentarios" rows="6" placeholder="Escriba sus observaciones..."></ion-textarea>
+      </ion-item>
 
-      <!-- Comentarios comunes -->
-      <div class="comentarios-comunes" *ngIf="comentariosComunes && comentariosComunes.length > 0">
-        <h4>Comentarios Comunes</h4>
+      <!-- Sección de Comentarios Comunes -->
+      <div class="comentarios-comunes">
+        <ion-label class="comentarios-label">Sugerencias (clic para añadir)</ion-label>
         <div class="chips-container">
-          <ion-chip 
-            *ngFor="let comentario of comentariosComunes"
-            (click)="agregarComentarioComun(comentario)"
-            color="primary"
-            outline="true">
-            {{ comentario }}
+          <ion-chip *ngFor="let comentario of comentariosComunes" (click)="agregarComentarioComun(comentario)" outline="true" color="primary">
+            <ion-icon name="add-circle-outline"></ion-icon>
+            <ion-label>{{ comentario }}</ion-label>
           </ion-chip>
         </div>
+        <ion-item lines="none" class="guardar-comun-item">
+          <!-- Deshabilitar si no hay texto -->
+          <ion-checkbox [(ngModel)]="guardarComoComun" slot="start" labelPlacement="end" [disabled]="!comentarios || comentarios.trim().length === 0">
+             Guardar comentario actual como sugerencia
+          </ion-checkbox>
+        </ion-item>
       </div>
 
-      <!-- Área de texto para comentarios -->
-      <h4>Comentarios Personalizados</h4>
-      <ion-textarea
-        [(ngModel)]="comentarios"
-        placeholder="Ingrese comentarios para este criterio..."
-        rows="6"
-        fill="outline"
-        [autoGrow]="true">
-      </ion-textarea>
-
-      <!-- Opción para guardar como comentario común -->
-      <div class="guardar-comun">
-        <ion-button 
-          fill="clear" 
-          size="small"
-          (click)="marcarParaGuardar()"
-          [color]="guardarComoComun ? 'primary' : 'medium'">
-          <ion-icon name="add-circle-outline" slot="start"></ion-icon>
-          {{ guardarComoComun ? 'Se guardará como común' : 'Guardar como comentario común' }}
-        </ion-button>
-      </div>
-
-      <div class="modal-actions">
-        <ion-button fill="clear" color="medium" (click)="cerrar()">
-          Cancelar
-        </ion-button>
-        <ion-button color="primary" (click)="guardar()">
-          <ion-icon name="save-outline" slot="start"></ion-icon>
-          Guardar
-        </ion-button>
+      <!-- Sección de Ajuste de Puntaje -->
+      <div class="ajuste-puntaje">
+        <ion-label class="ajuste-label">Ajuste de Puntaje Manual</ion-label>
+        <p class="puntaje-info">Puntaje base (del nivel): <strong>{{ puntajeOriginal }}</strong></p>
+        <ion-item class="ajuste-input">
+          <ion-label position="floating">Ajuste (+/-)</ion-label>
+          <ion-input type="number" [(ngModel)]="ajustePuntaje" placeholder="Ej: -2 o 5"></ion-input>
+        </ion-item>
+        <p class="puntaje-final">Puntaje Final: <strong>{{ calcularPuntajeFinal() }}</strong></p>
       </div>
     </ion-content>
+
+    <ion-footer class="ion-no-border">
+      <ion-toolbar>
+        <ion-buttons slot="end">
+          <ion-button (click)="confirmar()" color="primary" fill="solid" [strong]="true">
+            <ion-icon slot="start" name="save"></ion-icon>
+            Guardar Cambios
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-footer>
   `,
   styles: [`
-    .puntaje-section {
-      background: var(--ion-color-light);
-      padding: 16px;
-      border-radius: 8px;
-      margin-bottom: 24px;
+    ion-header ion-toolbar {
+      --border-width: 0;
     }
-
-    .puntaje-section h4 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--ion-color-dark);
+    ion-content {
+      // Usar un fondo ligeramente gris para el contenido del modal
+      --background: var(--ion-color-light-tint);
     }
-
-    .puntaje-info {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .comentario-textarea {
+      --background: var(--ion-background-color); // Fondo blanco para el textarea
+      --border-radius: 8px;
+      margin-bottom: 16px;
     }
-
-    .puntaje-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .puntaje-item .label {
-      font-size: 13px;
-      color: var(--ion-color-medium);
-      min-width: 120px;
-    }
-
-    .puntaje-item .value {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--ion-color-dark);
-    }
-
-    .puntaje-item.total {
-      border-top: 1px solid var(--ion-color-medium);
-      padding-top: 12px;
-      margin-top: 4px;
-    }
-
-    .puntaje-item.total .value.final {
-      color: var(--ion-color-primary);
-      font-size: 18px;
-    }
-
-    .ajuste-nota {
-      margin: 12px 0 0 0;
-      font-size: 12px;
-      font-style: italic;
-      color: var(--ion-color-medium);
-    }
-
     .comentarios-comunes {
-      margin-bottom: 24px;
+      margin-top: 16px;
+      padding: 12px;
+      background: var(--ion-background-color); // Fondo blanco
+      border-radius: 8px;
+      border: 1px solid var(--ion-color-step-150);
     }
-
-    .comentarios-comunes h4 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
+    .comentarios-label {
       font-weight: 600;
-      color: var(--ion-color-dark);
+      color: var(--ion-color-medium-shade);
+      font-size: 0.9em;
+      margin-left: 4px; // Alineado con el item
     }
-
     .chips-container {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
+      padding: 8px 0;
     }
-
-    .chips-container ion-chip {
+    ion-chip {
       cursor: pointer;
-      transition: transform 0.2s;
+      font-size: 0.9em;
+      --padding-start: 8px;
+      --padding-end: 8px;
     }
-
-    .chips-container ion-chip:hover {
-      transform: scale(1.05);
+    .guardar-comun-item {
+      --padding-start: 0;
+      font-size: 0.9em;
+      --min-height: 30px;
     }
-
-    h4 {
-      margin: 0 0 12px 0;
-      font-size: 14px;
+    .ajuste-puntaje {
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px solid var(--ion-color-step-150);
+      background: var(--ion-background-color); // Fondo blanco
+      border-radius: 8px;
+    }
+    .ajuste-label {
       font-weight: 600;
-      color: var(--ion-color-dark);
-    }
-
-    .guardar-comun {
-      margin-top: 8px;
-      margin-bottom: 16px;
-    }
-
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px solid var(--ion-color-light);
-    }
-
-    ion-textarea {
+      color: var(--ion-color-primary);
+      font-size: 1.1em;
+      display: block;
       margin-bottom: 8px;
     }
-  `]
+    .puntaje-info {
+      font-size: 0.95em;
+      color: var(--ion-color-medium-shade);
+      margin: 4px 0 8px;
+    }
+    .ajuste-input {
+      --background: var(--ion-color-light-tint);
+      --border-radius: 6px;
+    }
+    .puntaje-final {
+      font-size: 1.2em;
+      font-weight: 700;
+      text-align: right;
+      margin-top: 12px;
+      color: var(--ion-color-primary);
+    }
+    ion-footer ion-toolbar {
+      padding: 8px;
+      --background: var(--ion-background-color); // Fondo blanco para el footer
+      border-top: 1px solid var(--ion-color-step-150);
+    }
+  `],
+  standalone: true,
+  imports: [
+    CommonModule,
+    FormsModule,
+    IonHeader, IonToolbar, IonTitle, IonContent, IonButton, IonIcon,
+    IonTextarea, IonInput, IonItem, IonLabel, IonChip, IonCheckbox,
+    IonFooter,
+    IonButtons // <--- ESTA ERA LA IMPORTACIÓN FALTANTE
+  ]
 })
-export class ComentariosModalComponent {
-  private modalCtrl = inject(ModalController);
-
+export class ComentariosModalComponent implements OnInit {
   @Input() criterioNombre: string = '';
   @Input() comentarios: string = '';
-  @Input() puntajeOriginal?: number;
+  @Input() puntajeOriginal: number = 0;
   @Input() ajustePuntaje: number = 0;
-  @Input() comentariosComunes?: string[];
+  @Input() comentariosComunes: string[] = [];
 
   guardarComoComun: boolean = false;
 
+  private modalController = inject(ModalController);
+
   constructor() {
-    addIcons({ close, saveOutline, addCircleOutline });
+    addIcons({ close, save, addCircleOutline });
   }
 
-  cerrar() {
-    this.modalCtrl.dismiss(null, 'cancel');
+  ngOnInit() {
+    // Asegurarse de que los tipos son correctos al recibir
+    this.puntajeOriginal = Number(this.puntajeOriginal) || 0;
+    this.ajustePuntaje = Number(this.ajustePuntaje) || 0;
   }
 
-  guardar() {
-    const resultado = {
+  cancelar() {
+    this.modalController.dismiss(null, 'cancel');
+  }
+
+  confirmar() {
+    // Asegurarse de que el ajuste sea un número antes de enviarlo
+    const ajusteNum = Number(this.ajustePuntaje) || 0;
+
+    const data = {
       comentarios: this.comentarios,
-      ajustePuntaje: this.ajustePuntaje,
+      ajustePuntaje: ajusteNum,
       guardarComoComun: this.guardarComoComun
     };
-    this.modalCtrl.dismiss(resultado, 'confirm');
+    this.modalController.dismiss(data, 'confirm');
   }
 
-  calcularPuntajeFinal(): number {
-    return Math.max(0, (this.puntajeOriginal || 0) + (this.ajustePuntaje || 0));
-  }
-
-  agregarComentarioComun(comentario: string): void {
-    if (this.comentarios) {
-      this.comentarios += '\n' + comentario;
+  agregarComentarioComun(comentario: string) {
+    // Añadir comentarios sugeridos con un salto de línea y un guion
+    if (this.comentarios && this.comentarios.trim()) {
+      this.comentarios = this.comentarios.trim() + '\n- ' + comentario;
     } else {
-      this.comentarios = comentario;
+      this.comentarios = '- ' + comentario;
     }
   }
 
-  marcarParaGuardar(): void {
-    this.guardarComoComun = !this.guardarComoComun;
+  calcularPuntajeFinal(): number {
+    const base = Number(this.puntajeOriginal) || 0;
+    const ajuste = Number(this.ajustePuntaje) || 0;
+    return Math.max(0, base + ajuste); // No permitir puntajes negativos
   }
 }
-

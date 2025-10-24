@@ -1,64 +1,132 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
-import { AlertController, ActionSheetController } from '@ionic/angular/standalone';
+import { of, throwError } from 'rxjs';
 import { HomePage } from './home.page';
 import { CursoService } from '../core/services/curso.service';
-import { ImportExportService } from '../core/services/import-export.service';
-import { of } from 'rxjs';
+import { Curso, Estudiante } from '../core/models';
 
 describe('HomePage', () => {
   let component: HomePage;
   let fixture: ComponentFixture<HomePage>;
+  let cursoService: jasmine.SpyObj<CursoService>;
 
-  const mockRouter = {
-    navigate: jasmine.createSpy('navigate')
+  // Mock datos
+  const mockEstudiante: Estudiante = {
+    apellidos: 'Doe',
+    nombres: 'John',
+    correo: 'john@example.com',
+    grupo: '1',
+    subgrupo: '1A'
   };
 
-  const mockCursoService = {
-    loadCursos: jasmine.createSpy('loadCursos').and.returnValue(Promise.resolve()),
-    cursos$: of({}),
-    setCursoActivo: jasmine.createSpy('setCursoActivo'),
-    createCursoFromCSV: jasmine.createSpy('createCursoFromCSV').and.returnValue(Promise.resolve('test-id')),
-    exportCursoToCSV: jasmine.createSpy('exportCursoToCSV').and.returnValue(Promise.resolve('csv-data')),
-    deleteCurso: jasmine.createSpy('deleteCurso').and.returnValue(Promise.resolve())
-  };
-
-  const mockImportExportService = {
-    readFileFromInput: jasmine.createSpy('readFileFromInput').and.returnValue(Promise.resolve('csv-data')),
-    validateCSV: jasmine.createSpy('validateCSV').and.returnValue({ valid: true }),
-    exportToCSV: jasmine.createSpy('exportToCSV').and.returnValue(Promise.resolve())
-  };
-
-  const mockAlertController = {
-    create: jasmine.createSpy('create').and.returnValue(Promise.resolve({
-      present: jasmine.createSpy('present')
-    }))
-  };
-
-  const mockActionSheetController = {
-    create: jasmine.createSpy('create').and.returnValue(Promise.resolve({
-      present: jasmine.createSpy('present')
-    }))
-  };
+  const mockCursos: Curso[] = [
+    {
+      id: '1',
+      nombre: 'Math 101',
+      estudiantes: [mockEstudiante],
+      evaluaciones: {},
+      createdAt: new Date().toISOString()
+    }
+  ];
 
   beforeEach(async () => {
+    const cursoServiceSpy = jasmine.createSpyObj(
+      'CursoService',
+      ['loadCursos'],
+      {
+        cursos$: of(mockCursos),
+        loading$: of(false),
+        error$: of(null)
+      }
+    );
+
     await TestBed.configureTestingModule({
       imports: [HomePage],
       providers: [
-        { provide: Router, useValue: mockRouter },
-        { provide: CursoService, useValue: mockCursoService },
-        { provide: ImportExportService, useValue: mockImportExportService },
-        { provide: AlertController, useValue: mockAlertController },
-        { provide: ActionSheetController, useValue: mockActionSheetController }
+        { provide: CursoService, useValue: cursoServiceSpy }
       ]
     }).compileComponents();
 
+    cursoService = TestBed.inject(CursoService) as jasmine.SpyObj<CursoService>;
     fixture = TestBed.createComponent(HomePage);
     component = fixture.componentInstance;
-    fixture.detectChanges();
   });
 
-  it('should create', () => {
-    expect(component).toBeTruthy();
+  describe('Component Initialization', () => {
+    it('should create the component', () => {
+      expect(component).toBeTruthy();
+    });
+
+    it('should initialize observables from service', () => {
+      expect(component.cursos$).toBe(cursoService.cursos$);
+      expect(component.loading$).toBe(cursoService.loading$);
+      expect(component.error$).toBe(cursoService.error$);
+    });
+  });
+
+  describe('ngOnInit', () => {
+    it('should call cursoService.loadCursos', () => {
+      cursoService.loadCursos.and.returnValue(Promise.resolve());
+      fixture.detectChanges();
+      expect(cursoService.loadCursos).toHaveBeenCalled();
+    });
+
+    it('should handle loadCursos error', async () => {
+      const error = new Error('Load failed');
+      cursoService.loadCursos.and.returnValue(Promise.reject(error));
+
+      spyOn(console, 'error');
+      fixture.detectChanges();
+
+      await fixture.whenStable();
+      expect(console.error).toHaveBeenCalledWith(
+        'Error cargando cursos:',
+        error
+      );
+    });
+  });
+
+  describe('Observable Streams', () => {
+    it('should emit cursos correctly', (done) => {
+      fixture.detectChanges();
+      component.cursos$.subscribe(cursos => {
+        expect(cursos.length).toBe(1);
+        expect(cursos[0].nombre).toBe('Math 101');
+        done();
+      });
+    });
+
+    it('should indicate loading state', (done) => {
+      fixture.detectChanges();
+      component.loading$.subscribe(loading => {
+        expect(loading).toBe(false);
+        done();
+      });
+    });
+  });
+
+  describe('ngOnDestroy', () => {
+    it('should emit destroy on component destruction', () => {
+      spyOn(component['destroy$'], 'next');
+      spyOn(component['destroy$'], 'complete');
+
+      component.ngOnDestroy();
+
+      expect(component['destroy$'].next).toHaveBeenCalled();
+      expect(component['destroy$'].complete).toHaveBeenCalled();
+    });
+
+    it('should unsubscribe from observables', (done) => {
+      fixture.detectChanges();
+      const subscription = component.cursos$.subscribe();
+
+      spyOn(subscription, 'unsubscribe');
+      component.ngOnDestroy();
+
+      // Los observables con takeUntil deberían completarse
+      setTimeout(() => {
+        expect(subscription.closed).toBe(true);
+        done();
+      }, 100);
+    });
   });
 });

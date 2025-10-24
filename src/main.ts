@@ -1,33 +1,36 @@
+import { enableProdMode, importProvidersFrom, APP_INITIALIZER, inject } from '@angular/core'; // Añadido APP_INITIALIZER, inject
 import { bootstrapApplication } from '@angular/platform-browser';
-import { RouteReuseStrategy, provideRouter, withPreloading, PreloadAllModules } from '@angular/router';
+import { RouteReuseStrategy, provideRouter } from '@angular/router';
 import { IonicRouteStrategy, provideIonicAngular } from '@ionic/angular/standalone';
-import { provideHttpClient } from '@angular/common/http';
-import { importProvidersFrom } from '@angular/core';
 import { IonicStorageModule } from '@ionic/storage-angular';
-import { Capacitor } from '@capacitor/core';
 
 import { routes } from './app/app.routes';
 import { AppComponent } from './app/app.component';
+import { environment } from './environments/environment';
+import { DatabaseService } from './app/core/services/database.service'; // Importar DatabaseService
 
-// Solo registrar jeep-sqlite si estamos en web y si está disponible
-if (Capacitor.getPlatform() === 'web') {
-  try {
-    import('jeep-sqlite/loader').then(({ defineCustomElements }) => {
-      defineCustomElements(window);
-    }).catch(() => {
-      console.log('jeep-sqlite no disponible, usando solo Ionic Storage');
-    });
-  } catch (error) {
-    console.log('jeep-sqlite no disponible');
-  }
+if (environment.production) {
+  enableProdMode();
 }
+
+// Factory function for APP_INITIALIZER
+export function initializeDatabaseFactory(databaseService: DatabaseService): () => Promise<void> {
+  return () => databaseService.init();
+}
+
 
 bootstrapApplication(AppComponent, {
   providers: [
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
-    provideIonicAngular(),
-    provideRouter(routes, withPreloading(PreloadAllModules)),
-    provideHttpClient(),
     importProvidersFrom(IonicStorageModule.forRoot()),
+    provideIonicAngular(),
+    provideRouter(routes),
+    // Proveedor APP_INITIALIZER para inicializar DatabaseService
+    {
+      provide: APP_INITIALIZER,
+      useFactory: initializeDatabaseFactory,
+      deps: [DatabaseService], // Dependencia del factory
+      multi: true // Necesario para APP_INITIALIZER
+    }
   ],
 });
