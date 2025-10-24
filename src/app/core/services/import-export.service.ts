@@ -5,15 +5,13 @@ import { Curso, EvaluacionesCurso } from '../models';
 import { AlertController, LoadingController, Platform, ToastController } from '@ionic/angular/standalone';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding, WriteFileResult } from '@capacitor/filesystem';
-import { Share, ShareOptions } from '@capacitor/share';
-import { FilePicker, PickFilesResult } from '@capacitor/file-picker';
+import { Share } from '@capacitor/share';
 
-// Define la estructura del archivo de backup
 interface PoliTrackBackup {
   exportDate: string;
   version: number;
-  cursos: { [key: string]: Omit<Curso, 'evaluaciones'> }; // Guardar solo la base del curso (estudiantes, etc.)
-  evaluaciones: { [cursoId: string]: EvaluacionesCurso }; // Guardar evaluaciones por separado
+  cursos: { [key: string]: Omit<Curso, 'evaluaciones'> };
+  evaluaciones: { [cursoId: string]: EvaluacionesCurso };
   comentariosComunes: string[];
   rubricas: { [key: string]: any };
 }
@@ -22,7 +20,6 @@ interface PoliTrackBackup {
   providedIn: 'root'
 })
 export class ImportExportService {
-
   private databaseService = inject(DatabaseService);
   private cursoService = inject(CursoService);
   private platform = inject(Platform);
@@ -31,21 +28,15 @@ export class ImportExportService {
   private toastController = inject(ToastController);
 
   private readonly BACKUP_VERSION = 1.0;
-  private readonly WEB_FILENAME = `politrack_backup_${new Date().toISOString().split('T')[0]}.json`;
 
   constructor() { }
 
-  /**
-   * Recopila todos los datos de la base de datos y los prepara para exportar.
-   */
   private async gatherDataForExport(): Promise<PoliTrackBackup> {
     const cursosObj = await this.databaseService.getCursos();
     const evaluaciones: { [cursoId: string]: EvaluacionesCurso } = {};
 
-    // Recopilar evaluaciones para cada curso
     for (const cursoId in cursosObj) {
       evaluaciones[cursoId] = await this.databaseService.getEvaluacionesCurso(cursoId);
-      // Limpiar el objeto curso para no duplicar datos (opcional, pero buena práctica)
       delete (cursosObj[cursoId] as any).evaluaciones;
     }
 
@@ -62,9 +53,6 @@ export class ImportExportService {
     };
   }
 
-  /**
-   * Exporta todos los datos de la aplicación a un archivo JSON.
-   */
   async exportarDatos(): Promise<void> {
     const loading = await this.loadingController.create({
       message: 'Generando copia de seguridad...',
@@ -73,12 +61,10 @@ export class ImportExportService {
 
     try {
       const backupData = await this.gatherDataForExport();
-      const jsonData = JSON.stringify(backupData, null, 2); // Formateado para legibilidad
+      const jsonData = JSON.stringify(backupData, null, 2);
       const fileName = `politrack_backup_${new Date().toISOString().split('T')[0]}.json`;
 
       if (Capacitor.isNativePlatform()) {
-        // --- Lógica Nativa (iOS/Android) ---
-        // Guardar en directorio de Documentos
         const result: WriteFileResult = await Filesystem.writeFile({
           path: fileName,
           data: jsonData,
@@ -88,18 +74,15 @@ export class ImportExportService {
 
         await loading.dismiss();
 
-        // Usar Share para compartir/guardar el archivo
         await Share.share({
           title: 'Copia de PoliTrack',
           text: `Copia de seguridad generada el ${new Date().toLocaleDateString()}`,
-          url: result.uri, // URI del archivo guardado
+          url: result.uri,
         });
 
       } else {
-        // --- Lógica Web ---
         await loading.dismiss();
 
-        // Crear un Blob y un link de descarga
         const blob = new Blob([jsonData], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -120,35 +103,13 @@ export class ImportExportService {
     }
   }
 
-  /**
-   * Importa datos desde un archivo JSON, borrando los datos actuales.
-   */
   async importarDatos(): Promise<void> {
-    // 1. Confirmar con el usuario
     const confirm = await this.confirmImport();
-    if (!confirm) return; // Usuario canceló
+    if (!confirm) return;
 
-    // 2. Obtener el archivo
     let fileContent: string | undefined;
     try {
-      if (Capacitor.isNativePlatform()) {
-        // --- Lógica Nativa (iOS/Android) ---
-        const result: PickFilesResult = await FilePicker.pickFiles({
-          readData: true, // Leer el contenido del archivo
-          types: ['application/json'],
-        });
-        if (result.files.length > 0) {
-          fileContent = result.files[0].data; // Contenido en base64
-          if (fileContent) {
-            // Decodificar Base64 a string
-            fileContent = atob(fileContent);
-          }
-        }
-      } else {
-        // --- Lógica Web ---
-        fileContent = await this.pickFileWeb();
-      }
-
+      fileContent = await this.pickFileWeb();
       if (!fileContent) {
         await this.showToast('No se seleccionó ningún archivo.', 'warning');
         return;
@@ -159,7 +120,6 @@ export class ImportExportService {
       return;
     }
 
-    // 3. Procesar y restaurar
     const loading = await this.loadingController.create({
       message: 'Restaurando datos...',
     });
@@ -168,54 +128,46 @@ export class ImportExportService {
     try {
       const backupData: PoliTrackBackup = JSON.parse(fileContent);
 
-      // Validar backup (básico)
       if (!backupData.version || !backupData.cursos || !backupData.evaluaciones) {
         throw new Error('El archivo no parece ser una copia de seguridad válida de PoliTrack.');
       }
 
-      // --- INICIO DE RESTAURACIÓN ---
-      // 4. Limpiar base de datos actual
       await this.databaseService.clearDatabase();
 
-      // 5. Restaurar Cursos
       for (const cursoId in backupData.cursos) {
         const curso = backupData.cursos[cursoId];
         await this.databaseService.saveCurso(curso.id, curso);
       }
 
-      // 6. Restaurar Evaluaciones
       for (const cursoId in backupData.evaluaciones) {
         const entregas = backupData.evaluaciones[cursoId];
         for (const entrega in entregas) {
           const evalsPorEntrega = (entregas as any)[entrega];
-          for (const estudianteId in evalsPorEntrega) {
-            const evaluacion = evalsPorEntrega[estudianteId];
-            await this.databaseService.saveFullEvaluacionEstudiante(
-              cursoId,
-              estudianteId,
-              entrega as 'E1' | 'E2' | 'EF',
-              evaluacion
-            );
+          if (evalsPorEntrega) {
+            for (const estudianteId in evalsPorEntrega) {
+              const evaluacion = evalsPorEntrega[estudianteId];
+              await this.databaseService.saveFullEvaluacionEstudiante(
+                cursoId,
+                estudianteId,
+                entrega as 'E1' | 'E2' | 'EF',
+                evaluacion
+              );
+            }
           }
         }
       }
 
-      // 7. Restaurar Comentarios Comunes
       if (backupData.comentariosComunes) {
         await this.databaseService.saveComentariosComunes(backupData.comentariosComunes);
       }
 
-      // 8. Restaurar Rúbricas
       if (backupData.rubricas) {
         for (const rubricaId in backupData.rubricas) {
           await this.databaseService.saveRubrica(rubricaId, backupData.rubricas[rubricaId]);
         }
       }
-      // --- FIN DE RESTAURACIÓN ---
 
       await loading.dismiss();
-
-      // 9. Recargar cursos en la UI
       await this.cursoService.loadCursos();
       await this.showAlert('Importación Completa', 'Los datos se han restaurado correctamente.');
 
@@ -226,14 +178,11 @@ export class ImportExportService {
     }
   }
 
-  /**
-   * Helper para mostrar un prompt de confirmación de importación.
-   */
   private async confirmImport(): Promise<boolean> {
     return new Promise(async (resolve) => {
       const alert = await this.alertController.create({
         header: 'Confirmar Importación',
-        message: '<strong>¡ADVERTENCIA!</strong> Esto borrará <strong>TODOS</strong> los datos actuales y los reemplazará con los del archivo. ¿Desea continuar?',
+        message: '¡ADVERTENCIA! Esto borrará TODOS los datos actuales y los reemplazará con los del archivo. ¿Desea continuar?',
         buttons: [
           { text: 'Cancelar', role: 'cancel', handler: () => resolve(false) },
           { text: 'Importar', role: 'destructive', handler: () => resolve(true) }
@@ -243,9 +192,6 @@ export class ImportExportService {
     });
   }
 
-  /**
-   * Helper para seleccionar un archivo JSON en la web.
-   */
   private pickFileWeb(): Promise<string | undefined> {
     return new Promise((resolve, reject) => {
       const input = document.createElement('input');
@@ -263,17 +209,15 @@ export class ImportExportService {
           };
           reader.readAsText(file);
         } else {
-          resolve(undefined); // No se seleccionó archivo
+          resolve(undefined);
         }
       };
-      // Simular click
       document.body.appendChild(input);
       input.click();
       document.body.removeChild(input);
     });
   }
 
-  // --- Helpers de UI ---
   private async showAlert(header: string, message: string) {
     const alert = await this.alertController.create({
       header,

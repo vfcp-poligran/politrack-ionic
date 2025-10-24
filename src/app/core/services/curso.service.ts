@@ -1,125 +1,135 @@
 import { Injectable, inject } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { v4 as uuidv4 } from 'uuid';
 import { Curso, Estudiante } from '../models';
-// El StorageService ya no es necesario, usamos DatabaseService
-// import { StorageService } from './storage.service';
-import { DatabaseService } from './database.service'; // <-- 1. Importar DatabaseService
+import { DatabaseService } from './database.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CursoService {
-  // 2. Inyectar DatabaseService
+
   private databaseService = inject(DatabaseService);
 
-  // 3. El BehaviorSubject se vuelve opcional.
-  //    Lo mantendremos por ahora para notificar a la home page,
-  //    pero la "fuente de la verdad" es la base de datos.
+  // BehaviorSubject para mantener la lista de cursos en memoria y notificar cambios
   private cursosSubject = new BehaviorSubject<Curso[]>([]);
-  cursos$ = this.cursosSubject.asObservable();
+  public cursos$: Observable<Curso[]> = this.cursosSubject.asObservable();
 
   constructor() {
-    // Cargar cursos al iniciar el servicio (después de que init() de DB se haya llamado en app.component)
-    this.loadCursos();
+    // Cargar los cursos al iniciar el servicio (después de que la DB esté lista)
+    // this.loadCursos(); // Es mejor llamarlo desde HomePage
   }
 
   /**
-   * Carga todos los cursos desde DatabaseService y actualiza el Observable.
+   * Carga (o recarga) todos los cursos desde la base de datos
+   * y actualiza el BehaviorSubject.
    */
   async loadCursos(): Promise<void> {
     try {
-      const cursosObj = await this.databaseService.getCursos();
-      // Convertir el objeto { id: curso } en un array [curso]
-      const cursosArray = Object.values(cursosObj);
+      const cursosMap = await this.databaseService.getCursos();
+      const cursosArray = Object.values(cursosMap);
       this.cursosSubject.next(cursosArray);
+      console.log('Cursos cargados en el servicio:', cursosArray.length);
     } catch (error) {
-      console.error('Error al cargar cursos en CursoService:', error);
-      this.cursosSubject.next([]); // Enviar array vacío en caso de error
+      console.error("Error al cargar cursos en CursoService:", error);
+      this.cursosSubject.next([]); // Emitir array vacío en caso de error
     }
   }
 
   /**
-   * Obtiene todos los cursos como un array.
-   * Llama a loadCursos para asegurar que los datos están frescos.
+   * Obtiene la lista actual de cursos del BehaviorSubject.
+   * Usar 'cursos$' para suscripciones reactivas.
    */
-  async getCursos(): Promise<Curso[]> {
-    await this.loadCursos(); // Recargar desde la DB
-    return this.cursosSubject.getValue(); // Devolver el valor actual
-  }
-
-  /**
-   * Agrega un nuevo curso a la base de datos.
-   */
-  async addCurso(nombre: string, estudiantes: Estudiante[]): Promise<Curso> {
-    try {
-      // Generar un ID único (ej. timestamp)
-      const cursoId = `curso_${Date.now()}`;
-      const nuevoCurso: Curso = {
-        id: cursoId,
-        nombre: nombre,
-        estudiantes: estudiantes,
-        evaluaciones: { E1: {}, E2: {}, EF: {} }, // Objeto de evaluaciones vacío
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      // 4. Llamar a databaseService.saveCurso
-      await this.databaseService.saveCurso(cursoId, nuevoCurso);
-
-      // 5. Recargar la lista de cursos
-      await this.loadCursos();
-      return nuevoCurso;
-    } catch (error) {
-      console.error('Error al agregar curso:', error);
-      throw new Error('No se pudo agregar el curso.');
-    }
+  getCursosSnapshot(): Curso[] {
+    return this.cursosSubject.getValue();
   }
 
   /**
    * Obtiene un solo curso desde la base de datos.
-   * Nota: Este método no carga evaluaciones, eso lo hace curso-detail.
+   * NOTA: Este método carga desde la DB, no del snapshot.
+   * El 'curso-detail.page' usa este método.
    */
-  async getCurso(id: string): Promise<Curso | null> {
+  async getCurso(cursoId: string): Promise<Curso | null> {
     try {
-      // 6. Llamar a databaseService.getCurso
-      return await this.databaseService.getCurso(id);
+      return await this.databaseService.getCurso(cursoId);
     } catch (error) {
-      console.error(`Error al obtener curso ${id}:`, error);
+      console.error(`Error al obtener curso ${cursoId}:`, error);
       return null;
     }
   }
 
   /**
-   * Actualiza los datos de un curso (ej. la lista de estudiantes).
+   * Agrega un nuevo curso a la base de datos y actualiza el Subject.
    */
-  async updateCurso(cursoId: string, data: Partial<Curso>): Promise<void> {
+  async addCurso(nombre: string, estudiantes: Estudiante[]): Promise<Curso> {
     try {
-      // 7. Llamar a databaseService.saveCurso (funciona como 'upsert')
-      //    Aseguramos que 'updatedAt' se actualice si el trigger de DB falla
-      data.updatedAt = new Date().toISOString();
-      await this.databaseService.saveCurso(cursoId, data);
+      const nuevoCurso: Curso = {
+        id: uuidv4(),
+        nombre: nombre,
+        estudiantes: estudiantes,
+        evaluaciones: {}, // Inicia vacío
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-      // 8. Recargar la lista de cursos
-      await this.loadCursos();
+      await this.databaseService.saveCurso(nuevoCurso.id, nuevoCurso);
+
+      // Actualizar el Subject local
+      const cursosActuales = this.getCursosSnapshot();
+      this.cursosSubject.next([...cursosActuales, nuevoCurso]);
+
+      return nuevoCurso;
     } catch (error) {
-      console.error(`Error al actualizar curso ${cursoId}:`, error);
-      throw new Error('No se pudo actualizar el curso.');
+      console.error("Error al agregar curso:", error);
+      throw error; // Relanzar para que la UI maneje el error
     }
   }
 
   /**
-   * Elimina un curso de la base de datos.
+   * Actualiza parcialmente un curso en la base de datos y actualiza el Subject.
+   */
+  async updateCurso(cursoId: string, data: Partial<Curso>): Promise<void> {
+    try {
+      // Obtener el curso existente para fusionar datos
+      const cursoExistente = await this.getCurso(cursoId);
+      if (!cursoExistente) {
+        throw new Error('El curso que intenta actualizar no existe.');
+      }
+
+      const cursoActualizado = { ...cursoExistente, ...data, updatedAt: new Date().toISOString() };
+
+      await this.databaseService.saveCurso(cursoId, cursoActualizado);
+
+      // Actualizar el Subject local
+      const cursosActuales = this.getCursosSnapshot();
+      const index = cursosActuales.findIndex(c => c.id === cursoId);
+      if (index !== -1) {
+        cursosActuales[index] = cursoActualizado;
+        this.cursosSubject.next([...cursosActuales]);
+      } else {
+        // Si no estaba en la lista por alguna razón, recargar todo
+        await this.loadCursos();
+      }
+    } catch (error) {
+      console.error(`Error al actualizar curso ${cursoId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina un curso de la base de datos y actualiza el Subject.
    */
   async deleteCurso(cursoId: string): Promise<void> {
     try {
-      // 9. Llamar a databaseService.deleteCurso
       await this.databaseService.deleteCurso(cursoId);
 
-      // 10. Recargar la lista de cursos
-      await this.loadCursos();
+      // Actualizar el Subject local
+      const cursosActuales = this.getCursosSnapshot();
+      const cursosFiltrados = cursosActuales.filter(c => c.id !== cursoId);
+      this.cursosSubject.next(cursosFiltrados);
     } catch (error) {
       console.error(`Error al eliminar curso ${cursoId}:`, error);
-      throw new Error('No se pudo eliminar el curso.');
+      throw error;
     }
   }
 }
