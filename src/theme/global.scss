@@ -1,12 +1,8 @@
-@import 'theme/variables';
-@import 'theme/base';
-@import 'theme/layout';
-@import 'theme/components';
-@import 'theme/utilities';
-@import 'theme/responsive';
-@import 'theme/animations';
+@use './variables' as *;
+@use './base' as *;
+@use './layout' as *;
+@use './components' as *;
+@use './utilities' as *;
+@use './responsive' as *;
+@use './animations' as *;
 
-// Importar estilos de Ionic
-@import '@ionic/angular/css/core.css';
-@import '@ionic/angular/css/normalize.css';
-@import '@ionic/angular/css/structure.css';

@@ -1,5 +1,71 @@
-<ion-segment [(ngModel)]="entregaActiva" (ionChange)="onEntregaChange($event)">
-  <ion-segment-button *ngFor="let entrega of entregas" [value]="entrega">
-    <ion-label>{{ getLabel(entrega) }}</ion-label>
-  </ion-segment-button>
-</ion-segment>
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-title>POLITrack</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="goToSettings()">
+        <ion-icon slot="icon-only" name="settings"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-header collapse="condense">
+    <ion-toolbar>
+      <ion-title size="large">POLITrack by Victor Castro</ion-title>
+    </ion-toolbar>
+  </ion-header>
+
+  <!-- Spinner de carga -->
+  <div *ngIf="isLoading" class="loading-container">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Cargando cursos...</p>
+  </div>
+
+  <!-- Lista de cursos -->
+  <div *ngIf="!isLoading && cursos.length > 0" class="cursos-container">
+    <ion-list>
+      <ion-item
+        *ngFor="let curso of cursos"
+        button
+        (click)="selectCurso(curso)"
+        detail="true">
+        <ion-label>
+          <h2>{{ curso.nombre }}</h2>
+          <p>{{ curso.estudiantes.length || 0 }} estudiantes</p>
+          <p class="curso-date">
+            Actualizado: {{ curso.updatedAt | date:'dd/MM/yyyy HH:mm' }}
+          </p>
+        </ion-label>
+        <ion-button
+          slot="end"
+          fill="clear"
+          (click)="mostrarOpcionesCurso(curso, $event)">
+          <ion-icon slot="icon-only" name="ellipsis-vertical"></ion-icon>
+        </ion-button>
+      </ion-item>
+    </ion-list>
+  </div>
+
+  <!-- Estado vacío -->
+  <div *ngIf="!isLoading && cursos.length === 0" class="empty-state">
+    <ion-icon name="school-outline" class="empty-icon"></ion-icon>
+    <h2>No hay cursos</h2>
+    <p>Importa un archivo CSV para crear tu primer curso</p>
+    <ion-button (click)="importarCSV()" expand="block" class="empty-action">
+      <ion-icon slot="start" name="add"></ion-icon>
+      Importar CSV
+    </ion-button>
+  </div>
+
+  <!-- Botón flotante para agregar curso -->
+  <ion-fab
+    *ngIf="!isLoading && cursos.length > 0"
+    vertical="bottom"
+    horizontal="end"
+    slot="fixed">
+    <ion-fab-button (click)="importarCSV()">
+      <ion-icon name="add"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

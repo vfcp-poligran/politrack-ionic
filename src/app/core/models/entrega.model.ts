@@ -4,19 +4,9 @@ export enum TipoEntrega {
   EF = 'EF'
 }
 
-/**
- * Array de todas las entregas para iteración
- */
-export const ENTREGAS = [
-  TipoEntrega.E1,
-  TipoEntrega.E2,
-  TipoEntrega.EF
-] as const;
+export const ENTREGAS: TipoEntrega[] = [TipoEntrega.E1, TipoEntrega.E2, TipoEntrega.EF];
 
-/**
- * Labels amigables para mostrar en UI
- */
-export const ENTREGA_LABELS: Record<TipoEntrega, string> = {
+export const ENTREGA_LABELS: { [key in TipoEntrega]: string } = {
   [TipoEntrega.E1]: 'Entrega 1',
   [TipoEntrega.E2]: 'Entrega 2',
   [TipoEntrega.EF]: 'Entrega Final'

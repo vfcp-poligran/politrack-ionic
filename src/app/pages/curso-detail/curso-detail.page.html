@@ -52,7 +52,6 @@
       <ion-label>Filtrar por Subgrupo</ion-label>
       <ion-select
         [(ngModel)]="subgrupoFilter"
-        (ionChange)="onSubgrupoChange($event)"
         placeholder="Todos"
         interface="action-sheet"
       >
@@ -114,10 +113,10 @@
 
             <!-- Puntajes de la entrega activa -->
             <div class="puntajes" slot="end">
-              <span class="puntaje-badge pg-score" (click)="$event.stopPropagation(); abrirEditorPuntos(estudiante, entregaActiva)">
+              <span class="puntaje-badge pg-score" (click)="$event.stopPropagation()">
                 PG: {{ getEvaluacion(estudiante.correo, entregaActiva)?.pg_score || 0 }}
               </span>
-              <span class="puntaje-badge pi-score" (click)="$event.stopPropagation(); abrirEditorPuntos(estudiante, entregaActiva)">
+              <span class="puntaje-badge pi-score" (click)="$event.stopPropagation()">
                 PI: {{ getEvaluacion(estudiante.correo, entregaActiva)?.pi_score || 0 }}
               </span>
             </div>
@@ -125,7 +124,7 @@
 
           <!-- Opciones de deslizamiento -->
           <ion-item-options side="end">
-            <ion-item-option color="danger" (click)="confirmEliminacion(estudiante)">
+            <ion-item-option color="danger" (click)="eliminarEstudiante(estudiante)">
               <ion-icon slot="icon-only" name="trashOutline"></ion-icon>
             </ion-item-option>
           </ion-item-options>
@@ -160,17 +159,17 @@
         </ion-list>
 
         <!-- Panel de Rúbrica (se muestra si hay estudiante o grupo seleccionado) -->
-        <div class="rubrica-container" *ngIf="evaluacionActual.estudiante || evaluacionGrupalActiva">
+        <div class="rubrica-container" *ngIf="evaluacionActual.estudiante">
 
           <!-- Encabezado de la Rúbrica -->
           <ion-item-divider>
-            <ion-label *ngIf="evaluacionGrupalActiva">
-              Evaluando Grupo: <strong>{{ evaluacionGrupal.subgrupo }}</strong>
+            <ion-label *ngIf="evaluacionActual?.subgrupo">
+              Evaluando Grupo: <strong>{{ evaluacionActual.subgrupo }}</strong>
             </ion-label>
-            <ion-label *ngIf="evaluacionActual.estudiante">
+            <ion-label *ngIf="evaluacionActual?.estudiante">
               Evaluando: <strong>{{ evaluacionActual.estudiante.nombres }}</strong>
             </ion-label>
-            <ion-button fill="clear" slot="end" (click)="cancelarEvaluacion()" title="Descartar cambios">
+            <ion-button fill="clear" slot="end" (click)="iniciarEvaluacion(evaluacionActual.estudiante)" title="Descartar cambios">
               <ion-icon name="refreshOutline" slot="icon-only"></ion-icon>
             </ion-button>
           </ion-item-divider>
@@ -201,7 +200,7 @@
 
           <!-- Botón de Resumen Grupal (si aplica) -->
           <ion-button
-            *ngIf="evaluacionGrupalActiva"
+            *ngIf="!!evaluacionActual"
             expand="block"
             fill="outline"
             (click)="mostrarResumen = !mostrarResumen"
@@ -265,14 +264,14 @@
           <!-- FIN: RÚBRICA DETALLADA -->
 
           <!-- INICIO: RESUMEN GRUPAL (sección de estadísticas eliminada) -->
-          <div class="resumen-grupal" *ngIf="mostrarResumen && evaluacionGrupalActiva">
+          <div class="resumen-grupal" *ngIf="mostrarResumen && !!evaluacionActual">
             <ion-item-divider>
-              <ion-label>Resumen de Evaluación: {{ evaluacionGrupal.subgrupo }}</ion-label>
+              <ion-label>Resumen de Evaluación: {{ evaluacionActual.estudiante.subgrupo }}</ion-label>
             </ion-item-divider>
 
             <div class="ion-padding">
               <p>
-                El puntaje total grupal asignado para la <strong>{{ entregaActiva }}</strong> es:
+                El puntaje total asignado para la <strong>{{ entregaActiva }}</strong> es:
               </p>
               <h1 class="puntaje-total-resumen">{{ calcularTotalEvaluacion() }} / {{ getMaximoPuntaje() }}</h1>
 
@@ -282,7 +281,7 @@
 
               <h4 class="ion-margin-top">Comentario General</h4>
               <p class="comentario-display">
-                {{ evaluacionGrupal.comentarios || '(Sin comentario general)' }}
+                {{ evaluacionActual.comentarios || '(Sin comentario general)' }}
               </p>
             </div>
           </div>
@@ -294,3 +293,4 @@
     </div> <!-- Fin de .seguimiento-panel-container -->
   </div> <!-- Fin de .page-container -->
 </ion-content>
+

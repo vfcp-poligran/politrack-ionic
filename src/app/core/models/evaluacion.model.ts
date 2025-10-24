@@ -51,3 +51,10 @@ export interface EvaluacionesCurso {
   E2?: { [correo: string]: Evaluacion };
   EF?: { [correo: string]: Evaluacion };
 }
+
+export interface NivelCriterio {
+  id: number;
+  nombre: string;
+  valor: number;
+  descripcion?: string;
+}
