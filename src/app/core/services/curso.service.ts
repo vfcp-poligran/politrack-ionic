@@ -132,4 +132,71 @@ export class CursoService {
       throw error;
     }
   }
+
+  /**
+   * Establece el curso activo (puede usarse para navegación o estado global)
+   */
+  setCursoActivo(cursoId: string): void {
+    // Por ahora, solo log. Puede extenderse para mantener estado global
+    console.log('Curso activo establecido:', cursoId);
+  }
+
+  /**
+   * Crea un curso desde datos CSV
+   */
+  async createCursoFromCSV(csvData: string, nombreCurso: string): Promise<string> {
+    try {
+      const estudiantes = this.parseCSVToEstudiantes(csvData);
+      const nuevoCurso = await this.addCurso(nombreCurso, estudiantes);
+      return nuevoCurso.id;
+    } catch (error) {
+      console.error('Error al crear curso desde CSV:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Parsea datos CSV y devuelve un array de estudiantes
+   */
+  private parseCSVToEstudiantes(csvData: string): Estudiante[] {
+    const lines = csvData.split('\n').filter(line => line.trim() !== '');
+    const estudiantes: Estudiante[] = [];
+
+    // Asumiendo formato: apellidos,nombres,correo,subgrupo
+    for (let i = 1; i < lines.length; i++) { // Saltar header
+      const values = lines[i].split(',').map(v => v.trim());
+      if (values.length >= 4) {
+        estudiantes.push({
+          apellidos: values[0],
+          nombres: values[1],
+          correo: values[2],
+          subgrupo: values[3]
+        });
+      }
+    }
+
+    return estudiantes;
+  }
+
+  /**
+   * Exporta un curso a formato CSV
+   */
+  async exportCursoToCSV(cursoId: string): Promise<string> {
+    try {
+      const curso = await this.getCurso(cursoId);
+      if (!curso) {
+        throw new Error('Curso no encontrado');
+      }
+
+      let csv = 'apellidos,nombres,correo,subgrupo\n';
+      curso.estudiantes.forEach(est => {
+        csv += `${est.apellidos},${est.nombres},${est.correo},${est.subgrupo}\n`;
+      });
+
+      return csv;
+    } catch (error) {
+      console.error('Error al exportar curso a CSV:', error);
+      throw error;
+    }
+  }
 }

@@ -5,53 +5,44 @@ import { Curso, EvaluacionesCurso } from '../models';
   providedIn: 'root'
 })
 export class DatabaseService {
-  // Ejemplo de propiedades
-  private db: any;
-
   async init(): Promise<void> {
     // Inicialización de la base de datos
   }
 
-  private async initStorage(): Promise<void> {
-    // Inicialización de storage
-  }
-
-  private async createSQLiteTables(): Promise<void> {
-    // Creación de tablas SQLite
-  }
-
-  private async ensureInitialized(): Promise<void> {
-    // Verifica que la BD esté lista
-  }
-
-  private safeParse<T>(jsonString: string | null | undefined, defaultValue: T): T {
-    try {
-      return jsonString ? JSON.parse(jsonString) : defaultValue;
-    } catch {
-      return defaultValue;
-    }
-  }
-
-  async saveCurso(cursoId: string, cursoData: Partial<Curso>): Promise<void> {
+  async saveCurso(_cursoId: string, _cursoData: Partial<Curso>): Promise<void> {
     // Guarda curso
   }
 
-  async getCurso(cursoId: string): Promise<Curso | undefined> {
+  async getCurso(_cursoId: string): Promise<Curso | undefined> {
     // Obtiene curso
     return undefined;
   }
 
-  async deleteCurso(cursoId: string): Promise<void> {
+  async getCursos(): Promise<{ [key: string]: Curso }> {
+    // Obtiene todos los cursos
+    return {};
+  }
+
+  async deleteCurso(_cursoId: string): Promise<void> {
     // Elimina curso
   }
 
-  async getEvaluacionesCurso(cursoId: string): Promise<EvaluacionesCurso> {
+  async getEvaluacionesCurso(_cursoId: string): Promise<EvaluacionesCurso> {
     // Obtiene evaluaciones
     return {} as EvaluacionesCurso;
   }
 
-  async deleteEvaluacionesEstudiante(cursoId: string, estudianteId: string): Promise<void> {
+  async deleteEvaluacionesEstudiante(_cursoId: string, _estudianteId: string): Promise<void> {
     // Elimina evaluaciones de estudiante
+  }
+
+  async saveFullEvaluacionEstudiante(
+    _cursoId: string,
+    _estudianteId: string,
+    _entrega: 'E1' | 'E2' | 'EF',
+    _evaluacion: any
+  ): Promise<void> {
+    // Guarda evaluación completa de estudiante
   }
 
   async getComentariosComunes(): Promise<string[]> {
@@ -59,15 +50,15 @@ export class DatabaseService {
     return [];
   }
 
-  async saveComentariosComunes(comentarios: string[]): Promise<void> {
+  async saveComentariosComunes(_comentarios: string[]): Promise<void> {
     // Guarda comentarios comunes
   }
 
-  async addComentarioComun(comentario: string): Promise<void> {
+  async addComentarioComun(_comentario: string): Promise<void> {
     // Añade comentario común
   }
 
-  async saveRubrica(rubricaId: string, rubricaData: any): Promise<void> {
+  async saveRubrica(_rubricaId: string, _rubricaData: any): Promise<void> {
     // Guarda rúbrica
   }
 
@@ -76,7 +67,7 @@ export class DatabaseService {
     return {};
   }
 
-  async saveUIState(uiState: any): Promise<void> {
+  async saveUIState(_uiState: any): Promise<void> {
     // Guarda estado UI
   }
 

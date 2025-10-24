@@ -192,7 +192,7 @@
               label="Comentario General"
               labelPlacement="stacked"
               placeholder="Escribe un comentario general..."
-              [(ngModel)]="evaluacionGrupalActiva ? evaluacionGrupal.comentarios : evaluacionActual.comentarios"
+              [(ngModel)]="comentariosActuales"
               (ionChange)="actualizarComentarios()"
               [autoGrow]="true"
               rows="3"

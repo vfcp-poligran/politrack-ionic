@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { DatabaseService } from './database.service';
 import { CursoService } from './curso.service';
 import { Curso, EvaluacionesCurso } from '../models';
-import { AlertController, LoadingController, Platform, ToastController } from '@ionic/angular/standalone';
+import { AlertController, LoadingController, ToastController } from '@ionic/angular/standalone';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding, WriteFileResult } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -22,7 +22,6 @@ interface PoliTrackBackup {
 export class ImportExportService {
   private databaseService = inject(DatabaseService);
   private cursoService = inject(CursoService);
-  private platform = inject(Platform);
   private alertController = inject(AlertController);
   private loadingController = inject(LoadingController);
   private toastController = inject(ToastController);
@@ -204,7 +203,7 @@ export class ImportExportService {
           reader.onload = (e) => {
             resolve(e.target?.result as string);
           };
-          reader.onerror = (e) => {
+          reader.onerror = () => {
             reject(new Error('No se pudo leer el archivo.'));
           };
           reader.readAsText(file);
@@ -235,5 +234,76 @@ export class ImportExportService {
       position: 'bottom'
     });
     await toast.present();
+  }
+
+  /**
+   * Lee el contenido de un archivo desde un input de tipo file
+   */
+  async readFileFromInput(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        resolve(e.target?.result as string);
+      };
+      reader.onerror = () => {
+        reject(new Error('No se pudo leer el archivo.'));
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  /**
+   * Valida el formato de un CSV
+   */
+  validateCSV(csvData: string): { valid: boolean; error?: string } {
+    try {
+      const lines = csvData.split('\n').filter(line => line.trim() !== '');
+
+      if (lines.length < 2) {
+        return { valid: false, error: 'El archivo CSV debe contener al menos un encabezado y una fila de datos' };
+      }
+
+      const header = lines[0].toLowerCase();
+      const requiredFields = ['apellidos', 'nombres', 'correo', 'subgrupo'];
+
+      for (const field of requiredFields) {
+        if (!header.includes(field)) {
+          return { valid: false, error: `El encabezado debe contener el campo: ${field}` };
+        }
+      }
+
+      // Validar que cada línea tenga el número correcto de columnas
+      const headerColumns = lines[0].split(',').length;
+      for (let i = 1; i < lines.length; i++) {
+        const columns = lines[i].split(',').length;
+        if (columns !== headerColumns) {
+          return { valid: false, error: `La fila ${i + 1} tiene un número incorrecto de columnas` };
+        }
+      }
+
+      return { valid: true };
+    } catch (error: any) {
+      return { valid: false, error: `Error al validar CSV: ${error.message}` };
+    }
+  }
+
+  /**
+   * Exporta datos a un archivo CSV
+   */
+  async exportToCSV(csvContent: string, filename: string): Promise<void> {
+    try {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Error al exportar CSV:', error);
+      throw new Error(`No se pudo exportar el archivo: ${error.message}`);
+    }
   }
 }

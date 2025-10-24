@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/Documents/Job/POLI/politrack-ionic - copia/src/app/home/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
