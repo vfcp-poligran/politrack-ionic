@@ -30,7 +30,8 @@ export class CursoService {
    * Obtiene un curso específico
    */
   async getCurso(cursoId: string): Promise<Curso | null> {
-    return await this.db.getCurso(cursoId);
+    const curso = await this.db.getCurso(cursoId);
+    return curso ?? null;
   }
 
   /**
