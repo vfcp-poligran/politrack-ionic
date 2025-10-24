@@ -1,86 +1,72 @@
 import { Injectable } from '@angular/core';
-import { Curso, EvaluacionesCurso } from '../models';
+import { Evaluacion } from '../models/evaluacion.model'; // Ajusta la ruta según corresponda
+
+// Define EvaluacionesCurso type
+type EvaluacionesCurso = {
+  [entrega: string]: {
+    [estudianteId: string]: Evaluacion & { updatedAt: string }
+  }
+};
 
 @Injectable({
   providedIn: 'root'
 })
 export class DatabaseService {
-  async init(): Promise<void> {
-    // Inicialización de la base de datos
-  }
 
-  async saveCurso(_cursoId: string, _cursoData: Partial<Curso>): Promise<void> {
-    // Guarda curso
-  }
-
-  async getCurso(_cursoId: string): Promise<Curso | undefined> {
-    // Obtiene curso
-    return undefined;
-  }
-
-  async getCursos(): Promise<{ [key: string]: Curso }> {
-    // Obtiene todos los cursos
-    return {};
-  }
-
-  async deleteCurso(_cursoId: string): Promise<void> {
-    // Elimina curso
-  }
-
-  async getEvaluacionesCurso(_cursoId: string): Promise<EvaluacionesCurso> {
-    // Obtiene evaluaciones
-    return {} as EvaluacionesCurso;
-  }
-
-  async deleteEvaluacionesEstudiante(_cursoId: string, _estudianteId: string): Promise<void> {
-    // Elimina evaluaciones de estudiante
-  }
-
+  /**
+   * Guarda la evaluación completa de un estudiante para una entrega
+   * @param cursoId ID del curso
+   * @param estudianteId Email del estudiante (identificador)
+   * @param entrega Tipo de entrega (E1, E2, EF)
+   * @param evaluacion Datos de la evaluación a guardar
+   */
   async saveFullEvaluacionEstudiante(
-    _cursoId: string,
-    _estudianteId: string,
-    _entrega: 'E1' | 'E2' | 'EF',
-    _evaluacion: any
+    cursoId: string,
+    estudianteId: string,
+    entrega: 'E1' | 'E2' | 'EF',
+    evaluacion: Evaluacion
   ): Promise<void> {
-    // Guarda evaluación completa de estudiante
+    if (!cursoId || !estudianteId || !entrega) {
+      throw new Error('Parámetros requeridos no proporcionados');
+    }
+
+    try {
+      // Obtener evaluaciones del curso
+      let evaluacionesCurso = await this.getEvaluacionesCurso(cursoId);
+
+      // Inicializar la entrega si no existe
+      if (!evaluacionesCurso[entrega]) {
+        evaluacionesCurso[entrega] = {};
+      }
+
+      // Guardar la evaluación del estudiante
+      (evaluacionesCurso[entrega] as any)[estudianteId] = {
+        ...evaluacion,
+        updatedAt: new Date().toISOString()
+      };
+
+      // Persistir en BD
+      const key = `evaluaciones_${cursoId}`;
+      await this.storage?.set(key, evaluacionesCurso);
+
+      console.log(`✓ Evaluación guardada para ${estudianteId} en ${entrega}`);
+    } catch (error) {
+      console.error('Error guardando evaluación:', error);
+      throw new Error(`No se pudo guardar evaluación: ${error}`);
+    }
   }
 
-  async getComentariosComunes(): Promise<string[]> {
-    // Obtiene comentarios comunes
-    return [];
-  }
+  // Método auxiliar que probablemente falta
+  private storage: any; // Inyectarías el servicio real
 
-  async saveComentariosComunes(_comentarios: string[]): Promise<void> {
-    // Guarda comentarios comunes
-  }
-
-  async addComentarioComun(_comentario: string): Promise<void> {
-    // Añade comentario común
-  }
-
-  async saveRubrica(_rubricaId: string, _rubricaData: any): Promise<void> {
-    // Guarda rúbrica
-  }
-
-  async getRubricas(): Promise<{ [key: string]: any }> {
-    // Obtiene rúbricas
-    return {};
-  }
-
-  async saveUIState(_uiState: any): Promise<void> {
-    // Guarda estado UI
-  }
-
-  async getUIState(): Promise<any> {
-    // Obtiene estado UI
-    return {};
-  }
-
-  async clearDatabase(): Promise<void> {
-    // Limpia la base de datos
-  }
-
-  async close(): Promise<void> {
-    // Cierra la base de datos
+  async getEvaluacionesCurso(cursoId: string): Promise<EvaluacionesCurso> {
+    try {
+      const key = `evaluaciones_${cursoId}`;
+      const evaluaciones = await this.storage?.get(key);
+      return evaluaciones || {} as EvaluacionesCurso;
+    } catch (error) {
+      console.error('Error obteniendo evaluaciones:', error);
+      return {} as EvaluacionesCurso;
+    }
   }
 }

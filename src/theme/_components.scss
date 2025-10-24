@@ -1,0 +1,43 @@
+.poli-button {
+  display: inline-flex;
+  align-items: center;
+  padding: $spacing-sm $spacing-md;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: none;
+
+  &--primary {
+    background-color: $color-primary;
+    color: white;
+
+    &:hover {
+      background-color: darken($color-primary, 10%);
+      transform: translateY(-2px);
+    }
+  }
+
+  &--secondary {
+    background-color: transparent;
+    color: $color-primary;
+    border: 2px solid $color-primary;
+
+    &:hover {
+      background-color: rgba($color-primary, 0.1);
+    }
+  }
+}
+
+.poli-card {
+  background-color: $color-bg;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: $spacing-lg;
+  transition: all 0.3s ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    transform: translateY(-2px);
+  }
+}
